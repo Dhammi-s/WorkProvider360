@@ -1,0 +1,106 @@
+@host = http://localhost:5299
+
+# For LOCAL testing, the tenant is resolved from this header (falls back to the
+# request Host in production). Value must match an active Agencies.DomainUrl.
+@tenant = yourdomain.com
+
+###
+# 1) Bootstrap the first SuperAdmin (only works while the tenant has no users)
+POST {{host}}/api/users/bootstrap-admin
+Content-Type: application/json
+X-Tenant-Domain: {{tenant}}
+
+{
+  "email": "admin@yourdomain.com",
+  "fullName": "First Admin",
+  "password": "ChangeMe123!"
+}
+
+###
+# 2) Login
+# @name login
+POST {{host}}/api/auth/login
+Content-Type: application/json
+X-Tenant-Domain: {{tenant}}
+
+{
+  "email": "admin@yourdomain.com",
+  "password": "ChangeMe123!"
+}
+
+###
+@accessToken = {{login.response.body.data.accessToken}}
+@refreshToken = {{login.response.body.data.refreshToken}}
+
+###
+# 3) Current profile (any authenticated role)
+GET {{host}}/api/users/me
+Authorization: Bearer {{accessToken}}
+
+###
+# 4) List users (SuperAdmin / Admin only)
+GET {{host}}/api/users
+Authorization: Bearer {{accessToken}}
+
+###
+# 5) Create a user (SuperAdmin / Admin only). RoleId 4 = User
+POST {{host}}/api/users
+Authorization: Bearer {{accessToken}}
+Content-Type: application/json
+
+{
+  "email": "member@yourdomain.com",
+  "fullName": "Team Member",
+  "password": "MemberPass123!",
+  "roleId": 4
+}
+
+###
+# 6) Refresh the access token
+POST {{host}}/api/auth/refresh-token
+Content-Type: application/json
+
+{
+  "accessToken": "{{accessToken}}",
+  "refreshToken": "{{refreshToken}}"
+}
+
+###
+# 7) Forgot password (always returns success)
+POST {{host}}/api/auth/forgot-password
+Content-Type: application/json
+X-Tenant-Domain: {{tenant}}
+
+{
+  "email": "admin@yourdomain.com"
+}
+
+###
+# 8) Reset password (token comes from the emailed link)
+POST {{host}}/api/auth/reset-password
+Content-Type: application/json
+X-Tenant-Domain: {{tenant}}
+
+{
+  "email": "admin@yourdomain.com",
+  "token": "PASTE-TOKEN-FROM-EMAIL",
+  "newPassword": "BrandNew123!",
+  "confirmPassword": "BrandNew123!"
+}
+
+###
+# 9) Change password (authenticated)
+POST {{host}}/api/auth/change-password
+Authorization: Bearer {{accessToken}}
+Content-Type: application/json
+
+{
+  "currentPassword": "ChangeMe123!",
+  "newPassword": "BrandNew123!",
+  "confirmPassword": "BrandNew123!"
+}
+
+###
+# 10) Logout (revokes all refresh tokens)
+POST {{host}}/api/auth/logout
+Authorization: Bearer {{accessToken}}
