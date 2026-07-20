@@ -28,6 +28,30 @@ BEGIN
 END
 GO
 
+CREATE OR ALTER PROCEDURE dbo.usp_Role_NameExists
+    @RoleName NVARCHAR(50)
+AS
+BEGIN
+    SET NOCOUNT ON;
+    SELECT COUNT(1) FROM dbo.Roles WHERE RoleName = @RoleName;
+END
+GO
+
+/* RoleId is supplied by the caller (roles are static, not IDENTITY). */
+CREATE OR ALTER PROCEDURE dbo.usp_Role_Create
+    @RoleId   INT,
+    @RoleName NVARCHAR(50),
+    @IsActive BIT
+AS
+BEGIN
+    SET NOCOUNT ON;
+    INSERT INTO dbo.Roles (RoleId, RoleName, IsActive)
+    VALUES (@RoleId, @RoleName, @IsActive);
+
+    SELECT @RoleId;   -- echo the id back
+END
+GO
+
 /* ------------------------------- Users ----------------------------------- */
 CREATE OR ALTER PROCEDURE dbo.usp_User_GetByEmail
     @Email NVARCHAR(256)

@@ -29,4 +29,22 @@ public sealed class RoleRepository : IRoleRepository
             new CommandDefinition("usp_Role_GetById", new { RoleId = roleId },
                 commandType: CommandType.StoredProcedure, cancellationToken: ct));
     }
+
+    public async Task<bool> RoleNameExistsAsync(string roleName, CancellationToken ct = default)
+    {
+        using var db = await _connectionFactory.CreateTenantConnectionAsync(ct);
+        var count = await db.ExecuteScalarAsync<int>(
+            new CommandDefinition("usp_Role_NameExists", new { RoleName = roleName },
+                commandType: CommandType.StoredProcedure, cancellationToken: ct));
+        return count > 0;
+    }
+
+    public async Task<int> CreateAsync(Role role, CancellationToken ct = default)
+    {
+        using var db = await _connectionFactory.CreateTenantConnectionAsync(ct);
+        return await db.ExecuteScalarAsync<int>(
+            new CommandDefinition("usp_Role_Create",
+                new { role.RoleId, role.RoleName, role.IsActive },
+                commandType: CommandType.StoredProcedure, cancellationToken: ct));
+    }
 }
