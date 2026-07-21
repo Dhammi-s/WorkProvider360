@@ -1,6 +1,6 @@
 <Solution>
-  <Project Path="WebApplication1.csproj" />
   <Project Path="SaaS.Core/SaaS.Core.csproj" />
   <Project Path="SaaS.DAL/SaaS.DAL.csproj" />
   <Project Path="SaaS.BLL/SaaS.BLL.csproj" />
+  <Project Path="WorkProvider360.csproj" />
 </Solution>
