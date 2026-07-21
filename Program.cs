@@ -47,26 +47,37 @@ builder.Services
     });
 
 builder.Services.AddAuthorization();
+
+// ---------------------------------------------------------------------------
+// CORS — allow the deployed frontend origin(s) to call the API from a browser.
+// Origins are read from configuration ("Cors:AllowedOrigins") so they can be
+// changed per-environment without recompiling.
+// ---------------------------------------------------------------------------
 const string FrontendCorsPolicy = "FrontendCors";
 var corsOrigins = builder.Configuration.GetSection("Cors:AllowedOrigins").Get<string[]>()
     ?? Array.Empty<string>();
 var allowAnyOrigin = corsOrigins.Length == 0 || corsOrigins.Contains("*");
-
 builder.Services.AddCors(options =>
 {
     options.AddPolicy(FrontendCorsPolicy, policy =>
     {
+        // Safe here because auth uses a Bearer token (not cookies), so we never
+        // combine AllowAnyOrigin with AllowCredentials.
         if (allowAnyOrigin)
         {
-                        policy.AllowAnyOrigin();
- // GET, POST, OPTIONS (preflight), etc.
+            policy.AllowAnyOrigin();
         }
-            else
+        else
         {
             policy.WithOrigins(corsOrigins);
         }
+
+        policy
+            .AllowAnyHeader()   // Authorization, Content-Type, X-Tenant-Domain
+            .AllowAnyMethod();  // GET, POST, OPTIONS (preflight), etc.
     });
 });
+
 builder.Services.AddControllers();
 builder.Services.AddOpenApi(options =>
 {
@@ -92,6 +103,9 @@ app.UseSwaggerUI(options =>
 app.UseMiddleware<ExceptionHandlingMiddleware>();
 
 app.UseHttpsRedirection();
+
+// Must run before authentication so preflight (OPTIONS) requests are answered
+// with the CORS headers instead of hitting the auth/endpoint pipeline.
 app.UseCors(FrontendCorsPolicy);
 
 app.UseAuthentication();
