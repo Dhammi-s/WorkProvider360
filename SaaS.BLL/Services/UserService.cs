@@ -58,6 +58,28 @@ public sealed class UserService : IUserService
         return Map(user);
     }
 
+    public async Task<UserDto> RegisterUserAsync(RegisterUserRequestDto request, CancellationToken ct = default)
+    {
+        if (await _users.EmailExistsAsync(request.Email, ct))
+            throw AppException.Conflict("A user with this email already exists.");
+
+        var (hash, salt) = _passwordHasher.HashPassword(request.Password);
+
+        var user = new AppUser
+        {
+            Email = request.Email,
+            FullName = request.FullName,
+            PasswordHash = hash,
+            PasswordSalt = salt,
+            RoleId = RoleConstants.UserId,
+            IsActive = true,
+        };
+
+        user.UserId = await _users.CreateAsync(user, ct);
+        user.RoleName = RoleConstants.User;
+        return Map(user);
+    }
+
     public async Task<UserDto> BootstrapFirstAdminAsync(BootstrapAdminRequestDto request, CancellationToken ct = default)
     {
         var existing = await _users.GetAllAsync(ct);

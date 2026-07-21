@@ -31,6 +31,19 @@ public sealed class UsersController : BaseApiController
         return Ok(ApiResponse<UserDto>.Ok(created, "First administrator created."));
     }
 
+    /// <summary>
+    /// Public self-registration. Always creates an active account with the
+    /// "User" role. Tenant is resolved by the request host.
+    /// </summary>
+    [AllowAnonymous]
+    [HttpPost("register")]
+    public async Task<ActionResult<ApiResponse<UserDto>>> Register(
+        [FromBody] RegisterUserRequestDto request, CancellationToken ct)
+    {
+        var created = await _users.RegisterUserAsync(request, ct);
+        return Ok(ApiResponse<UserDto>.Ok(created, "Account created. You can now sign in."));
+    }
+
     /// <summary>Any authenticated user can read the current profile.</summary>
     [HttpGet("me")]
     public async Task<ActionResult<ApiResponse<UserDto>>> Me(CancellationToken ct)
