@@ -59,18 +59,16 @@ var app = builder.Build();
 // ---------------------------------------------------------------------------
 // HTTP pipeline
 // ---------------------------------------------------------------------------
-if (app.Environment.IsDevelopment())
+// OpenAPI document (/openapi/v1.json) + Swagger UI (/swagger) in ALL environments.
+// NOTE: this exposes your full API surface publicly in production. If you'd rather
+// keep it internal, wrap this block in `if (app.Environment.IsDevelopment())`
+// again, or put it behind auth / an allow-list.
+app.MapOpenApi();
+app.UseSwaggerUI(options =>
 {
-    // Serves the OpenAPI document at /openapi/v1.json ...
-    app.MapOpenApi();
-
-    // ... and the Swagger UI at /swagger, pointing at that document.
-    app.UseSwaggerUI(options =>
-    {
-        options.SwaggerEndpoint("/openapi/v1.json", "WorkProvider360 API v1");
-        options.RoutePrefix = "swagger";
-    });
-}
+    options.SwaggerEndpoint("/openapi/v1.json", "WorkProvider360 API v1");
+    options.RoutePrefix = "swagger";
+});
 
 app.UseMiddleware<ExceptionHandlingMiddleware>();
 
