@@ -1,3 +1,5 @@
+using System.Security.Cryptography;
+using Microsoft.Extensions.Options;
 using SaaS.Core.Constants;
 using SaaS.Core.Dtos.Inbound;
 using SaaS.Core.Dtos.Outbound;
@@ -5,6 +7,7 @@ using SaaS.Core.Entities;
 using SaaS.Core.Exceptions;
 using SaaS.Core.Interfaces.Repositories;
 using SaaS.Core.Interfaces.Services;
+using SaaS.Core.Settings;
 
 namespace SaaS.BLL.Services;
 
@@ -13,12 +16,21 @@ public sealed class UserService : IUserService
     private readonly IUserRepository _users;
     private readonly IRoleRepository _roles;
     private readonly IPasswordHasher _passwordHasher;
+    private readonly IEmailService _email;
+    private readonly SmtpSettings _smtp;
 
-    public UserService(IUserRepository users, IRoleRepository roles, IPasswordHasher passwordHasher)
+    public UserService(
+        IUserRepository users,
+        IRoleRepository roles,
+        IPasswordHasher passwordHasher,
+        IEmailService email,
+        IOptions<SmtpSettings> smtp)
     {
         _users = users;
         _roles = roles;
         _passwordHasher = passwordHasher;
+        _email = email;
+        _smtp = smtp.Value;
     }
 
     public async Task<IReadOnlyList<UserDto>> GetAllAsync(CancellationToken ct = default)
@@ -101,6 +113,37 @@ public sealed class UserService : IUserService
         user.UserId = await _users.CreateAsync(user, ct);
         user.RoleName = RoleConstants.SuperAdmin;
         return Map(user);
+    }
+
+    public async Task ResendCredentialsAsync(int userId, CancellationToken ct = default)
+    {
+        var user = await _users.GetByIdAsync(userId, ct)
+            ?? throw AppException.NotFound("User not found.");
+
+        var newPassword = GenerateTemporaryPassword();
+        var (hash, salt) = _passwordHasher.HashPassword(newPassword);
+        await _users.UpdatePasswordAsync(userId, hash, salt, ct);
+
+        await _email.SendCredentialsAsync(user.Email, user.FullName, user.Email, newPassword, BuildLoginUrl(), ct);
+    }
+
+    private string BuildLoginUrl()
+    {
+        var baseUrl = (_smtp.ResetPasswordBaseUrl ?? string.Empty).Trim();
+        const string resetSuffix = "/reset-password";
+        if (baseUrl.EndsWith(resetSuffix, StringComparison.OrdinalIgnoreCase))
+            baseUrl = baseUrl[..^resetSuffix.Length];
+        baseUrl = baseUrl.TrimEnd('/');
+        return string.IsNullOrEmpty(baseUrl) ? "/login" : $"{baseUrl}/login";
+    }
+
+    /// <summary>A random 14-char password satisfying the 8+ minimum with mixed classes.</summary>
+    private static string GenerateTemporaryPassword()
+    {
+        const string chars = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789";
+        var bytes = RandomNumberGenerator.GetBytes(12);
+        var core = new string(bytes.Select(b => chars[b % chars.Length]).ToArray());
+        return core + "Aa9!";
     }
 
     private static UserDto Map(AppUser u) => new()

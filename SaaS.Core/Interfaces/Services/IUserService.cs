@@ -13,6 +13,12 @@ public interface IUserService
     Task<UserDto> RegisterUserAsync(RegisterUserRequestDto request, CancellationToken ct = default);
 
     /// <summary>
+    /// Resets the user's password to a new temporary one and emails the credentials.
+    /// Used by admins to re-send login details (the original password is not recoverable).
+    /// </summary>
+    Task ResendCredentialsAsync(int userId, CancellationToken ct = default);
+
+    /// <summary>
     /// Creates the first SuperAdmin for the current tenant. Fails if the tenant
     /// already has any user (so the endpoint self-disables after first use).
     /// </summary>

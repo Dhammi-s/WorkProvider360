@@ -83,4 +83,16 @@ public sealed class UsersController : BaseApiController
             ? NotFound(ApiResponse.Fail("User not found."))
             : Ok(ApiResponse<UserDto>.Ok(user));
     }
+
+    /// <summary>
+    /// Re-send login credentials to a user by resetting their password to a new
+    /// temporary one and emailing it. SuperAdmin / Admin only.
+    /// </summary>
+    [Authorize(Roles = $"{RoleConstants.SuperAdmin},{RoleConstants.Admin}")]
+    [HttpPost("{id:int}/resend-credentials")]
+    public async Task<ActionResult<ApiResponse<object?>>> ResendCredentials(int id, CancellationToken ct)
+    {
+        await _users.ResendCredentialsAsync(id, ct);
+        return Ok(ApiResponse.Ok("New credentials have been emailed to the user."));
+    }
 }
