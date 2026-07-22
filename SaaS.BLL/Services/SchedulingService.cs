@@ -318,6 +318,9 @@ public sealed class SchedulingService : ISchedulingService
         var affected = await _schedules.ClockOutAsync(scheduleId, currentUserId, ct);
         if (affected == 0)
             throw AppException.BadRequest("You are not currently clocked in for this schedule.");
+
+        // Clocking out finishes the job.
+        await _schedules.UpdateStatusAsync(scheduleId, "Completed", null, ct);
     }
 
     public async Task<TimeEntryDto> AddManualTimeAsync(int scheduleId, ManualTimeEntryRequestDto request, int currentUserId, int roleId, CancellationToken ct = default)
