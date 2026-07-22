@@ -1,7 +1,9 @@
 <Solution>
+  <Folder Name="/AzureFunctions/">
+    <Project Path="AutomaticAzurefunction/AutomaticAzurefunction.csproj" Id="15d81283-e6b9-406f-a50d-beef428fd299" />
+  </Folder>
+  <Project Path="SaaS.BLL/SaaS.BLL.csproj" />
   <Project Path="SaaS.Core/SaaS.Core.csproj" />
   <Project Path="SaaS.DAL/SaaS.DAL.csproj" />
-  <Project Path="../WorkProvider360DB/Automatic/Automatic.csproj" Id="b6a740ad-671f-4974-bd89-fa7375ad9c9c" />
-  <Project Path="SaaS.BLL/SaaS.BLL.csproj" />
   <Project Path="WorkProvider360.csproj" />
 </Solution>
