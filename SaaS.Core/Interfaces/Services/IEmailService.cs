@@ -17,4 +17,13 @@ public interface IEmailService
 
     /// <summary>Notifies an applicant that their application was rejected.</summary>
     Task SendApplicationRejectedAsync(string toAddress, string fullName, string roleName, string reason, CancellationToken ct = default);
+
+    /// <summary>Notifies the assigned user that a schedule was assigned to them.</summary>
+    Task SendScheduleAssignedAsync(string toAddress, string userName, string title, string? location, DateTime startUtc, DateTime endUtc, CancellationToken ct = default);
+
+    /// <summary>Notifies an admin/manager that a schedule was created for a user.</summary>
+    Task SendScheduleNotificationAsync(string toAddress, string title, string assignedUserName, DateTime startUtc, DateTime endUtc, CancellationToken ct = default);
+
+    /// <summary>Alerts an admin/manager that a user reported an injury on a schedule.</summary>
+    Task SendScheduleInjuryReportAsync(string toAddress, string title, string reporterName, string message, CancellationToken ct = default);
 }

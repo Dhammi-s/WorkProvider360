@@ -2,8 +2,11 @@ using System.Text;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.IdentityModel.Tokens;
 using SaaS.BLL;
+using SaaS.Core.Interfaces.Infrastructure;
 using SaaS.Core.Settings;
 using SaaS.DAL;
+using WebApplication1.Hubs;
+using WebApplication1.Infrastructure;
 using WebApplication1.Middleware;
 using WebApplication1.OpenApi;
 
@@ -44,9 +47,25 @@ builder.Services
             ClockSkew = TimeSpan.FromMinutes(1),
             ValidAlgorithms = new[] { SecurityAlgorithms.HmacSha512 },
         };
+
+        // SignalR sends the bearer token as an "access_token" query-string value
+        // on the WebSocket/SSE request (headers aren't available there).
+        options.Events = new JwtBearerEvents
+        {
+            OnMessageReceived = context =>
+            {
+                var accessToken = context.Request.Query["access_token"];
+                var path = context.HttpContext.Request.Path;
+                if (!string.IsNullOrEmpty(accessToken) && path.StartsWithSegments("/hubs"))
+                    context.Token = accessToken;
+                return Task.CompletedTask;
+            },
+        };
     });
 
 builder.Services.AddAuthorization();
+builder.Services.AddSignalR();
+builder.Services.AddSingleton<ILocationBroadcaster, LocationBroadcaster>();
 
 // ---------------------------------------------------------------------------
 // CORS — allow the deployed frontend origin(s) to call the API from a browser.
@@ -118,5 +137,6 @@ app.UseMiddleware<TenantResolutionMiddleware>();
 app.UseAuthorization();
 
 app.MapControllers();
+app.MapHub<LocationHub>("/hubs/location");
 
 app.Run();
