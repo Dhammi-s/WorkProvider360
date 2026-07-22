@@ -165,6 +165,33 @@ public sealed class SchedulingController : BaseApiController
         return Ok(ApiResponse<TimeEntryDto>.Ok(entry, "Time entry updated."));
     }
 
+    // ------------------------------------------------------------- Live location
+
+    /// <summary>Assigned user posts a GPS position (only while clocked in).</summary>
+    [HttpPost("{id:int}/location")]
+    public async Task<ActionResult<ApiResponse<object?>>> RecordLocation(
+        int id, [FromBody] RecordLocationRequestDto request, CancellationToken ct)
+    {
+        await _scheduling.RecordLocationAsync(id, request, CurrentUserId, CurrentRoleId, CurrentAgencyId, ct);
+        return Ok(ApiResponse.Ok("Location recorded."));
+    }
+
+    /// <summary>Breadcrumb trail of positions recorded for a schedule.</summary>
+    [HttpGet("{id:int}/location/trail")]
+    public async Task<ActionResult<ApiResponse<IReadOnlyList<LocationPingDto>>>> GetTrail(int id, CancellationToken ct)
+    {
+        var trail = await _scheduling.GetTrailAsync(id, CurrentUserId, CurrentRoleId, ct);
+        return Ok(ApiResponse<IReadOnlyList<LocationPingDto>>.Ok(trail));
+    }
+
+    /// <summary>Latest position of every currently-active (clocked-in) schedule.</summary>
+    [HttpGet("location/live")]
+    public async Task<ActionResult<ApiResponse<IReadOnlyList<LiveLocationDto>>>> GetLive(CancellationToken ct)
+    {
+        var live = await _scheduling.GetLiveLocationsAsync(CurrentUserId, CurrentRoleId, ct);
+        return Ok(ApiResponse<IReadOnlyList<LiveLocationDto>>.Ok(live));
+    }
+
     // ---------------------------------------------------------------------- Reports
 
     [HttpGet("reports")]

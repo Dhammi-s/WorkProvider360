@@ -4,6 +4,7 @@ using SaaS.Core.Dtos.Inbound;
 using SaaS.Core.Dtos.Outbound;
 using SaaS.Core.Entities;
 using SaaS.Core.Exceptions;
+using SaaS.Core.Interfaces.Infrastructure;
 using SaaS.Core.Interfaces.Repositories;
 using SaaS.Core.Interfaces.Services;
 
@@ -24,6 +25,8 @@ public sealed class SchedulingService : ISchedulingService
 
     private readonly IScheduleRepository _schedules;
     private readonly ISchedulingSettingsRepository _settings;
+    private readonly ILocationRepository _locations;
+    private readonly ILocationBroadcaster _broadcaster;
     private readonly IUserService _users;
     private readonly IEmailService _email;
     private readonly ILogger<SchedulingService> _logger;
@@ -31,12 +34,16 @@ public sealed class SchedulingService : ISchedulingService
     public SchedulingService(
         IScheduleRepository schedules,
         ISchedulingSettingsRepository settings,
+        ILocationRepository locations,
+        ILocationBroadcaster broadcaster,
         IUserService users,
         IEmailService email,
         ILogger<SchedulingService> logger)
     {
         _schedules = schedules;
         _settings = settings;
+        _locations = locations;
+        _broadcaster = broadcaster;
         _users = users;
         _email = email;
         _logger = logger;
@@ -444,6 +451,100 @@ public sealed class SchedulingService : ISchedulingService
             TotalHours = Round(grouped.Sum(r => r.TotalHours)),
             TotalPay = Round(grouped.Sum(r => r.TotalPay)),
         };
+    }
+
+    // ---------------------------------------------------------- Live location
+
+    public async Task RecordLocationAsync(int scheduleId, RecordLocationRequestDto request, int currentUserId, int roleId, int agencyId, CancellationToken ct = default)
+    {
+        var schedule = await _schedules.GetByIdAsync(scheduleId, ct)
+            ?? throw AppException.NotFound("Schedule not found.");
+
+        if (schedule.AssignedUserId != currentUserId)
+            throw AppException.Forbidden("Only the assigned user can share location for this schedule.");
+
+        // Location is only shared while actually clocked in on the task.
+        var open = await _schedules.GetOpenTimeEntryAsync(scheduleId, currentUserId, ct);
+        if (open is null)
+            throw AppException.BadRequest("You must be clocked in to share your location.");
+
+        var pingId = await _locations.CreateAsync(new LocationPing
+        {
+            ScheduleId = scheduleId,
+            UserId = currentUserId,
+            Latitude = request.Latitude,
+            Longitude = request.Longitude,
+            AccuracyMeters = request.AccuracyMeters,
+        }, ct);
+
+        var live = new LiveLocationDto
+        {
+            ScheduleId = scheduleId,
+            Title = schedule.Title,
+            UserId = currentUserId,
+            UserName = schedule.AssignedUserName ?? string.Empty,
+            CustomerName = schedule.CustomerName,
+            Location = schedule.Location,
+            Latitude = request.Latitude,
+            Longitude = request.Longitude,
+            AccuracyMeters = request.AccuracyMeters,
+            RecordedUtc = DateTime.UtcNow,
+        };
+
+        try
+        {
+            await _broadcaster.BroadcastLiveLocationAsync(agencyId, live, ct);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Stored location ping {PingId} but failed to broadcast it.", pingId);
+        }
+    }
+
+    public async Task<IReadOnlyList<LocationPingDto>> GetTrailAsync(int scheduleId, int currentUserId, int roleId, CancellationToken ct = default)
+    {
+        var settings = await _settings.GetAsync(ct);
+        var schedule = await _schedules.GetByIdAsync(scheduleId, ct)
+            ?? throw AppException.NotFound("Schedule not found.");
+
+        EnsureCanViewSchedule(roleId, settings, schedule, currentUserId);
+
+        var pings = await _locations.GetTrailAsync(scheduleId, ct);
+        return pings.Select(p => new LocationPingDto
+        {
+            PingId = p.PingId,
+            ScheduleId = p.ScheduleId,
+            UserId = p.UserId,
+            UserName = p.UserName ?? string.Empty,
+            Latitude = p.Latitude,
+            Longitude = p.Longitude,
+            AccuracyMeters = p.AccuracyMeters,
+            RecordedUtc = p.RecordedUtc,
+        }).ToList();
+    }
+
+    public async Task<IReadOnlyList<LiveLocationDto>> GetLiveLocationsAsync(int currentUserId, int roleId, CancellationToken ct = default)
+    {
+        var settings = await _settings.GetAsync(ct);
+        var level = LevelForRole(roleId, settings);
+        if (level == None)
+            throw AppException.Forbidden("You do not have access to live locations.");
+
+        int? scope = level == Self ? currentUserId : null;
+        var rows = await _locations.GetLiveLatestAsync(scope, ct);
+        return rows.Select(r => new LiveLocationDto
+        {
+            ScheduleId = r.ScheduleId,
+            Title = r.Title,
+            UserId = r.UserId,
+            UserName = r.UserName,
+            CustomerName = r.CustomerName,
+            Location = r.Location,
+            Latitude = r.Latitude,
+            Longitude = r.Longitude,
+            AccuracyMeters = r.AccuracyMeters,
+            RecordedUtc = r.RecordedUtc,
+        }).ToList();
     }
 
     // ------------------------------------------------------------------ Emails

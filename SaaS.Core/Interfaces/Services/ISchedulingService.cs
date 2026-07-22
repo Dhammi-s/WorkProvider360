@@ -40,4 +40,9 @@ public interface ISchedulingService
 
     // Reporting
     Task<ScheduleReportDto> GetReportAsync(DateTime fromUtc, DateTime toUtc, int? assignedUserId, int currentUserId, int roleId, CancellationToken ct = default);
+
+    // Live location tracking
+    Task RecordLocationAsync(int scheduleId, RecordLocationRequestDto request, int currentUserId, int roleId, int agencyId, CancellationToken ct = default);
+    Task<IReadOnlyList<LocationPingDto>> GetTrailAsync(int scheduleId, int currentUserId, int roleId, CancellationToken ct = default);
+    Task<IReadOnlyList<LiveLocationDto>> GetLiveLocationsAsync(int currentUserId, int roleId, CancellationToken ct = default);
 }

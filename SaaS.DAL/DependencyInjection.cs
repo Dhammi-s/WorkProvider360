@@ -34,6 +34,7 @@ public static class DependencyInjection
         services.AddScoped<IApplicationSettingsRepository, ApplicationSettingsRepository>();
         services.AddScoped<IScheduleRepository, ScheduleRepository>();
         services.AddScoped<ISchedulingSettingsRepository, SchedulingSettingsRepository>();
+        services.AddScoped<ILocationRepository, LocationRepository>();
 
         return services;
     }
