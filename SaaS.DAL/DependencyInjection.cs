@@ -32,6 +32,9 @@ public static class DependencyInjection
         services.AddScoped<IApplicationRepository, ApplicationRepository>();
         services.AddScoped<IApplicationQuestionRepository, ApplicationQuestionRepository>();
         services.AddScoped<IApplicationSettingsRepository, ApplicationSettingsRepository>();
+        services.AddScoped<IScheduleRepository, ScheduleRepository>();
+        services.AddScoped<ISchedulingSettingsRepository, SchedulingSettingsRepository>();
+        services.AddScoped<ILocationRepository, LocationRepository>();
 
         return services;
     }

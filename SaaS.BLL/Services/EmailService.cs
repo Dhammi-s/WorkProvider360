@@ -118,4 +118,55 @@ public sealed class EmailService : IEmailService
 
         return SendAsync(toAddress, "Update on your application", body, ct);
     }
+
+    public Task SendScheduleAssignedAsync(string toAddress, string userName, string title, string? location, DateTime startUtc, DateTime endUtc, CancellationToken ct = default)
+    {
+        var body = $"""
+            <p>Hi {WebUtility.HtmlEncode(userName)},</p>
+            <p>You've been assigned a new schedule on WorkProvider360.</p>
+            <ul>
+              <li><strong>Job:</strong> {WebUtility.HtmlEncode(title)}</li>
+              <li><strong>Location:</strong> {WebUtility.HtmlEncode(location ?? "—")}</li>
+              <li><strong>Start:</strong> {FormatUtc(startUtc)}</li>
+              <li><strong>End:</strong> {FormatUtc(endUtc)}</li>
+            </ul>
+            <p>Sign in to accept or reject it, add notes, and track your time.</p>
+            """;
+
+        return SendAsync(toAddress, $"New schedule: {title}", body, ct);
+    }
+
+    public Task SendScheduleNotificationAsync(string toAddress, string title, string assignedUserName, DateTime startUtc, DateTime endUtc, CancellationToken ct = default)
+    {
+        var body = $"""
+            <p>A schedule has been created.</p>
+            <ul>
+              <li><strong>Job:</strong> {WebUtility.HtmlEncode(title)}</li>
+              <li><strong>Assigned to:</strong> {WebUtility.HtmlEncode(assignedUserName)}</li>
+              <li><strong>Start:</strong> {FormatUtc(startUtc)}</li>
+              <li><strong>End:</strong> {FormatUtc(endUtc)}</li>
+            </ul>
+            <p>Sign in to the dashboard to view the scheduler.</p>
+            """;
+
+        return SendAsync(toAddress, $"Schedule created: {title}", body, ct);
+    }
+
+    public Task SendScheduleInjuryReportAsync(string toAddress, string title, string reporterName, string message, CancellationToken ct = default)
+    {
+        var body = $"""
+            <p><strong>An injury has been reported on a schedule.</strong></p>
+            <ul>
+              <li><strong>Job:</strong> {WebUtility.HtmlEncode(title)}</li>
+              <li><strong>Reported by:</strong> {WebUtility.HtmlEncode(reporterName)}</li>
+            </ul>
+            <p><strong>Details:</strong> {WebUtility.HtmlEncode(message)}</p>
+            <p>Please follow up as appropriate.</p>
+            """;
+
+        return SendAsync(toAddress, $"Injury reported: {title}", body, ct);
+    }
+
+    private static string FormatUtc(DateTime utc) =>
+        utc.ToString("ddd, dd MMM yyyy HH:mm") + " UTC";
 }

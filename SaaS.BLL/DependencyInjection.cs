@@ -25,6 +25,7 @@ public static class DependencyInjection
         services.AddScoped<IUserService, UserService>();
         services.AddScoped<IRoleService, RoleService>();
         services.AddScoped<IApplicationService, ApplicationService>();
+        services.AddScoped<ISchedulingService, SchedulingService>();
 
         return services;
     }
