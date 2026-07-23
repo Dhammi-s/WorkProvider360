@@ -18,6 +18,15 @@ public sealed class InvoicesController : BaseApiController
 
     public InvoicesController(IInvoiceService invoices) => _invoices = invoices;
 
+    /// <summary>Creates a Stripe Checkout session for an online payment.</summary>
+    [HttpPost("checkout-session")]
+    public async Task<ActionResult<ApiResponse<CheckoutSessionDto>>> CreateCheckout(
+        [FromBody] CheckoutRequestDto request, CancellationToken ct)
+    {
+        var session = await _invoices.CreateCheckoutSessionAsync(request, ct);
+        return Ok(ApiResponse<CheckoutSessionDto>.Ok(session));
+    }
+
     [HttpPost("pay")]
     public async Task<ActionResult<ApiResponse<InvoiceDto>>> Pay(
         [FromBody] PayInvoiceRequestDto request, CancellationToken ct)

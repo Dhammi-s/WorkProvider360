@@ -35,8 +35,11 @@ public sealed class PayInvoiceRequestDto
     public DateTime? PeriodTo { get; set; }
     public string? Details { get; set; }
 
-    /// <summary>Cash (Phase 1). Online is added in Phase 2 (Stripe).</summary>
+    /// <summary>Cash or Online (Stripe).</summary>
     public string PaymentMethod { get; set; } = "Cash";
+
+    /// <summary>For Online payments: the completed Stripe Checkout session id (verified server-side).</summary>
+    public string? StripeSessionId { get; set; }
 
     /// <summary>Invoice PDF as a base64 data URI, generated in the browser.</summary>
     [Required]

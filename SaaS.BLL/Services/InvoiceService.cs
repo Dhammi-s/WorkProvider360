@@ -1,11 +1,16 @@
 using System.Net;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 using SaaS.Core.Dtos.Inbound;
 using SaaS.Core.Dtos.Outbound;
 using SaaS.Core.Entities;
 using SaaS.Core.Exceptions;
 using SaaS.Core.Interfaces.Repositories;
 using SaaS.Core.Interfaces.Services;
+using SaaS.Core.Settings;
+using Stripe;
+using Stripe.Checkout;
+using InvoiceEntity = SaaS.Core.Entities.Invoice;
 
 namespace SaaS.BLL.Services;
 
@@ -13,25 +18,81 @@ public sealed class InvoiceService : IInvoiceService
 {
     private readonly IInvoiceRepository _invoices;
     private readonly IEmailService _email;
+    private readonly StripeSettings _stripe;
     private readonly ILogger<InvoiceService> _logger;
 
-    public InvoiceService(IInvoiceRepository invoices, IEmailService email, ILogger<InvoiceService> logger)
+    public InvoiceService(
+        IInvoiceRepository invoices,
+        IEmailService email,
+        IOptions<StripeSettings> stripe,
+        ILogger<InvoiceService> logger)
     {
         _invoices = invoices;
         _email = email;
+        _stripe = stripe.Value;
         _logger = logger;
+    }
+
+    public async Task<CheckoutSessionDto> CreateCheckoutSessionAsync(CheckoutRequestDto request, CancellationToken ct = default)
+    {
+        if (string.IsNullOrWhiteSpace(_stripe.SecretKey))
+            throw AppException.BadRequest("Online payments aren't configured. Add your Stripe keys.");
+
+        StripeConfiguration.ApiKey = _stripe.SecretKey;
+
+        var options = new SessionCreateOptions
+        {
+            Mode = "payment",
+            SuccessUrl = request.SuccessUrl,
+            CancelUrl = request.CancelUrl,
+            LineItems = new List<SessionLineItemOptions>
+            {
+                new()
+                {
+                    Quantity = 1,
+                    PriceData = new SessionLineItemPriceDataOptions
+                    {
+                        Currency = "usd",
+                        UnitAmount = (long)Math.Round(request.Amount * 100m, MidpointRounding.AwayFromZero),
+                        ProductData = new SessionLineItemPriceDataProductDataOptions
+                        {
+                            Name = request.Description,
+                        },
+                    },
+                },
+            },
+        };
+
+        var session = await new SessionService().CreateAsync(options, cancellationToken: ct);
+        return new CheckoutSessionDto { SessionId = session.Id, Url = session.Url };
     }
 
     public async Task<InvoiceDto> PayAsync(PayInvoiceRequestDto request, int currentUserId, CancellationToken ct = default)
     {
-        // Phase 1: cash only. Online (Stripe) arrives in Phase 2.
         var method = string.IsNullOrWhiteSpace(request.PaymentMethod) ? "Cash" : request.PaymentMethod.Trim();
-        if (!method.Equals("Cash", StringComparison.OrdinalIgnoreCase))
-            throw AppException.BadRequest("Online payment isn't available yet. Please pay by cash.");
+        var isOnline = method.Equals("Online", StringComparison.OrdinalIgnoreCase);
+
+        if (isOnline)
+        {
+            // Verify the Stripe payment actually completed before recording it.
+            if (string.IsNullOrWhiteSpace(_stripe.SecretKey))
+                throw AppException.BadRequest("Online payments aren't configured.");
+            if (string.IsNullOrWhiteSpace(request.StripeSessionId))
+                throw AppException.BadRequest("Missing payment session.");
+
+            StripeConfiguration.ApiKey = _stripe.SecretKey;
+            var session = await new SessionService().GetAsync(request.StripeSessionId, cancellationToken: ct);
+            if (!string.Equals(session.PaymentStatus, "paid", StringComparison.OrdinalIgnoreCase))
+                throw AppException.BadRequest("The payment was not completed.");
+        }
+        else
+        {
+            method = "Cash";
+        }
 
         var pdfBytes = DecodePdf(request.PdfBase64);
 
-        var invoice = new Invoice
+        var invoice = new InvoiceEntity
         {
             InvoiceNumber = request.InvoiceNumber,
             RecipientUserId = request.RecipientUserId,
@@ -48,7 +109,7 @@ public sealed class InvoiceService : IInvoiceService
             Details = request.Details,
             PdfBase64 = request.PdfBase64,
             Status = "Paid",
-            PaymentMethod = "Cash",
+            PaymentMethod = method,
             CreatedByUserId = currentUserId,
         };
 
@@ -106,7 +167,7 @@ public sealed class InvoiceService : IInvoiceService
     private static string Sanitize(string s) =>
         new string(s.Select(c => char.IsLetterOrDigit(c) || c is '-' or '_' ? c : '-').ToArray());
 
-    private static string BuildEmailHtml(Invoice i)
+    private static string BuildEmailHtml(InvoiceEntity i)
     {
         var money = i.Amount.ToString("C2", System.Globalization.CultureInfo.GetCultureInfo("en-US"));
         var isShift = i.InvoiceType.Equals("ShiftPay", StringComparison.OrdinalIgnoreCase);
@@ -141,7 +202,7 @@ public sealed class InvoiceService : IInvoiceService
                   <tr><td style="padding:6px 0;color:#64748b">Invoice #</td><td style="text-align:right;font-weight:600">{WebUtility.HtmlEncode(i.InvoiceNumber)}</td></tr>
                   <tr><td style="padding:6px 0;color:#64748b">Date</td><td style="text-align:right">{i.PaidOn:MMM d, yyyy}</td></tr>
                   <tr><td style="padding:6px 0;color:#64748b">Recipient</td><td style="text-align:right">{WebUtility.HtmlEncode(i.RecipientEmail)}</td></tr>
-                  <tr><td style="padding:6px 0;color:#64748b">Payment method</td><td style="text-align:right;font-weight:600">Cash</td></tr>
+                  <tr><td style="padding:6px 0;color:#64748b">Payment method</td><td style="text-align:right;font-weight:600">{WebUtility.HtmlEncode(i.PaymentMethod)}</td></tr>
                   {shiftBlock}
                   <tr><td style="padding:12px 0 0;font-size:16px;font-weight:800">Total paid</td><td style="padding:12px 0 0;text-align:right;font-size:16px;font-weight:800;color:#059669">{money}</td></tr>
                 </table>
@@ -153,7 +214,7 @@ public sealed class InvoiceService : IInvoiceService
             """;
     }
 
-    private static InvoiceDto Map(Invoice i) => new()
+    private static InvoiceDto Map(InvoiceEntity i) => new()
     {
         InvoiceId = i.InvoiceId,
         InvoiceNumber = i.InvoiceNumber,
