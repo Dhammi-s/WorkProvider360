@@ -39,6 +39,7 @@ public static class DependencyInjection
         services.AddScoped<ITimezoneRepository, TimezoneRepository>();
         services.AddScoped<IEmailLogRepository, EmailLogRepository>();
         services.AddScoped<ILogSettingsRepository, LogSettingsRepository>();
+        services.AddScoped<IBrandingRepository, BrandingRepository>();
 
         return services;
     }

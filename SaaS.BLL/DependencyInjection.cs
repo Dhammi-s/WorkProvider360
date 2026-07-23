@@ -28,6 +28,7 @@ public static class DependencyInjection
         services.AddScoped<ISchedulingService, SchedulingService>();
         services.AddScoped<IOfficeService, OfficeService>();
         services.AddScoped<ILogService, LogService>();
+        services.AddScoped<IBrandingService, BrandingService>();
 
         return services;
     }
