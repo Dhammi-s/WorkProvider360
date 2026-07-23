@@ -69,6 +69,14 @@ public sealed class UsersController : BaseApiController
     public async Task<ActionResult<ApiResponse<UserDto>>> Create(
         [FromBody] CreateUserRequestDto request, CancellationToken ct)
     {
+        // An Admin can only create users inside their own office; ignore any
+        // office they try to specify and force their own.
+        if (CurrentRoleId == RoleConstants.AdminId)
+        {
+            var me = await _users.GetByIdAsync(CurrentUserId, ct);
+            request.OfficeId = me?.OfficeId;
+        }
+
         var created = await _users.CreateAsync(request, ct);
         return CreatedAtAction(nameof(GetById), new { id = created.UserId },
             ApiResponse<UserDto>.Ok(created, "User created."));
