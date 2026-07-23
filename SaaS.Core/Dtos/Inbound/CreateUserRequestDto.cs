@@ -15,4 +15,7 @@ public sealed class CreateUserRequestDto
 
     [Required]
     public int RoleId { get; set; }
+
+    /// <summary>Office the user belongs to. Optional for SuperAdmin-created accounts.</summary>
+    public Guid? OfficeId { get; set; }
 }

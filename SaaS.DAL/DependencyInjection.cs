@@ -35,6 +35,10 @@ public static class DependencyInjection
         services.AddScoped<IScheduleRepository, ScheduleRepository>();
         services.AddScoped<ISchedulingSettingsRepository, SchedulingSettingsRepository>();
         services.AddScoped<ILocationRepository, LocationRepository>();
+        services.AddScoped<IOfficeRepository, OfficeRepository>();
+        services.AddScoped<ITimezoneRepository, TimezoneRepository>();
+        services.AddScoped<IEmailLogRepository, EmailLogRepository>();
+        services.AddScoped<ILogSettingsRepository, LogSettingsRepository>();
 
         return services;
     }

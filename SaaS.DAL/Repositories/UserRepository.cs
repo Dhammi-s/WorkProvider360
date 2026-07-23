@@ -53,7 +53,8 @@ public sealed class UserRepository : IUserRepository
                     user.PasswordHash,
                     user.PasswordSalt,
                     user.RoleId,
-                    user.IsActive
+                    user.IsActive,
+                    user.OfficeId
                 },
                 commandType: CommandType.StoredProcedure, cancellationToken: ct));
     }

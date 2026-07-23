@@ -26,6 +26,8 @@ public static class DependencyInjection
         services.AddScoped<IRoleService, RoleService>();
         services.AddScoped<IApplicationService, ApplicationService>();
         services.AddScoped<ISchedulingService, SchedulingService>();
+        services.AddScoped<IOfficeService, OfficeService>();
+        services.AddScoped<ILogService, LogService>();
 
         return services;
     }

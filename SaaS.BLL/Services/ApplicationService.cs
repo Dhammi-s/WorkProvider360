@@ -169,13 +169,22 @@ public sealed class ApplicationService : IApplicationService
         };
     }
 
-    public async Task ApproveAsync(int applicationId, int reviewerUserId, CancellationToken ct = default)
+    public async Task ApproveAsync(int applicationId, int reviewerUserId, int reviewerRoleId, Guid? officeId, CancellationToken ct = default)
     {
         var app = await _applications.GetByIdAsync(applicationId, ct)
             ?? throw AppException.NotFound("Application not found.");
 
         if (!string.Equals(app.Status, "Pending", StringComparison.OrdinalIgnoreCase))
             throw AppException.BadRequest("This application has already been reviewed.");
+
+        // Assign the new user's office. An Admin approver can only place people in
+        // their own office; a SuperAdmin chooses the office (passed in).
+        Guid? assignedOffice = officeId;
+        if (reviewerRoleId == RoleConstants.AdminId)
+        {
+            var reviewer = await _users.GetByIdAsync(reviewerUserId, ct);
+            assignedOffice = reviewer?.OfficeId;
+        }
 
         var tempPassword = GenerateTemporaryPassword();
         await _users.CreateAsync(new CreateUserRequestDto
@@ -184,6 +193,7 @@ public sealed class ApplicationService : IApplicationService
             FullName = app.FullName,
             Password = tempPassword,
             RoleId = app.RequestedRoleId,
+            OfficeId = assignedOffice,
         }, ct);
 
         await _applications.UpdateStatusAsync(applicationId, "Approved", null, reviewerUserId, ct);

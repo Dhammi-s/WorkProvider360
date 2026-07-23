@@ -62,6 +62,7 @@ public sealed class UserService : IUserService
             PasswordHash = hash,
             PasswordSalt = salt,
             RoleId = request.RoleId,
+            OfficeId = request.OfficeId,
             IsActive = true,
         };
 
@@ -153,6 +154,8 @@ public sealed class UserService : IUserService
         FullName = u.FullName,
         RoleId = u.RoleId,
         RoleName = u.RoleName ?? string.Empty,
+        OfficeId = u.OfficeId,
+        OfficeName = u.OfficeName,
         IsActive = u.IsActive,
         CreatedOn = u.CreatedOn,
     };
