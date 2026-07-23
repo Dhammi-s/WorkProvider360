@@ -17,6 +17,7 @@ public static class DependencyInjection
     {
         services.Configure<JwtSettings>(configuration.GetSection(JwtSettings.SectionName));
         services.Configure<SmtpSettings>(configuration.GetSection(SmtpSettings.SectionName));
+        services.Configure<StripeSettings>(configuration.GetSection(StripeSettings.SectionName));
 
         services.AddSingleton<IPasswordHasher, Sha512PasswordHasher>();
         services.AddSingleton<IJwtTokenService, JwtTokenService>();
@@ -30,6 +31,7 @@ public static class DependencyInjection
         services.AddScoped<ILogService, LogService>();
         services.AddScoped<IBrandingService, BrandingService>();
         services.AddScoped<IAnnouncementService, AnnouncementService>();
+        services.AddScoped<IInvoiceService, InvoiceService>();
 
         return services;
     }

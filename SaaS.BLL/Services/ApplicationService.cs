@@ -99,6 +99,7 @@ public sealed class ApplicationService : IApplicationService
             Phone = request.Phone,
             Address = request.Address,
             RequestedRoleId = request.RequestedRoleId,
+            DesiredSalary = request.DesiredSalary,
         };
         var applicationId = await _applications.CreateAsync(application, ct);
 
@@ -136,6 +137,7 @@ public sealed class ApplicationService : IApplicationService
             Email = a.Email,
             RequestedRoleId = a.RequestedRoleId,
             RequestedRoleName = a.RequestedRoleName ?? string.Empty,
+            DesiredSalary = a.DesiredSalary,
             Status = a.Status,
             CreatedOn = a.CreatedOn,
         }).ToList();
@@ -156,6 +158,7 @@ public sealed class ApplicationService : IApplicationService
             Address = app.Address,
             RequestedRoleId = app.RequestedRoleId,
             RequestedRoleName = app.RequestedRoleName ?? string.Empty,
+            DesiredSalary = app.DesiredSalary,
             Status = app.Status,
             RejectionReason = app.RejectionReason,
             ReviewedOn = app.ReviewedOn,
@@ -194,6 +197,7 @@ public sealed class ApplicationService : IApplicationService
             Password = tempPassword,
             RoleId = app.RequestedRoleId,
             OfficeId = assignedOffice,
+            Salary = app.DesiredSalary,
         }, ct);
 
         await _applications.UpdateStatusAsync(applicationId, "Approved", null, reviewerUserId, ct);

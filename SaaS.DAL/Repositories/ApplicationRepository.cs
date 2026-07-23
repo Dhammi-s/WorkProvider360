@@ -28,7 +28,8 @@ public sealed class ApplicationRepository : IApplicationRepository
                     application.Email,
                     application.Phone,
                     application.Address,
-                    application.RequestedRoleId
+                    application.RequestedRoleId,
+                    application.DesiredSalary
                 },
                 commandType: CommandType.StoredProcedure, cancellationToken: ct));
     }
