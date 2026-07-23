@@ -2,22 +2,27 @@ using System.Net;
 using System.Net.Mail;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
+using SaaS.Core.Entities;
+using SaaS.Core.Interfaces.Repositories;
 using SaaS.Core.Interfaces.Services;
 using SaaS.Core.Settings;
 
 namespace SaaS.BLL.Services;
 
 /// <summary>
-/// Sends transactional email over SMTP using settings from configuration.
+/// Sends transactional email over SMTP using settings from configuration. Every
+/// send attempt is recorded to the tenant email log (Sent / Failed).
 /// </summary>
 public sealed class EmailService : IEmailService
 {
     private readonly SmtpSettings _settings;
+    private readonly IEmailLogRepository _emailLog;
     private readonly ILogger<EmailService> _logger;
 
-    public EmailService(IOptions<SmtpSettings> options, ILogger<EmailService> logger)
+    public EmailService(IOptions<SmtpSettings> options, IEmailLogRepository emailLog, ILogger<EmailService> logger)
     {
         _settings = options.Value;
+        _emailLog = emailLog;
         _logger = logger;
     }
 
@@ -42,12 +47,34 @@ public sealed class EmailService : IEmailService
         {
             await client.SendMailAsync(message, ct);
             _logger.LogInformation("Email sent to {ToAddress} with subject {Subject}", toAddress, subject);
+            await RecordAsync(toAddress, subject, htmlBody, "Sent", null, ct);
         }
         catch (Exception ex)
         {
             // Do not surface SMTP failures to the caller of forgot-password flows.
             _logger.LogError(ex, "Failed to send email to {ToAddress}", toAddress);
+            await RecordAsync(toAddress, subject, htmlBody, "Failed", ex.Message, ct);
             throw;
+        }
+    }
+
+    /// <summary>Best-effort log write; never breaks the email flow.</summary>
+    private async Task RecordAsync(string to, string subject, string body, string status, string? error, CancellationToken ct)
+    {
+        try
+        {
+            await _emailLog.CreateAsync(new EmailLog
+            {
+                ToAddress = to,
+                Subject = subject,
+                Body = body,
+                Status = status,
+                ErrorMessage = error,
+            }, ct);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to write email log for {ToAddress}", to);
         }
     }
 

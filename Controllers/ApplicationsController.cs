@@ -59,9 +59,10 @@ public sealed class ApplicationsController : BaseApiController
 
     [Authorize(Roles = $"{RoleConstants.SuperAdmin},{RoleConstants.Admin}")]
     [HttpPost("{id:int}/approve")]
-    public async Task<ActionResult<ApiResponse<object?>>> Approve(int id, CancellationToken ct)
+    public async Task<ActionResult<ApiResponse<object?>>> Approve(
+        int id, [FromBody] ApproveApplicationRequestDto? request, CancellationToken ct)
     {
-        await _applications.ApproveAsync(id, CurrentUserId, ct);
+        await _applications.ApproveAsync(id, CurrentUserId, CurrentRoleId, request?.OfficeId, ct);
         return Ok(ApiResponse.Ok("Application approved. Credentials have been emailed to the applicant."));
     }
 

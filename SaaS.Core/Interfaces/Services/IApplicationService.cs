@@ -16,7 +16,7 @@ public interface IApplicationService
     // Review (SuperAdmin / Admin)
     Task<IReadOnlyList<ApplicationListItemDto>> GetAllAsync(string? status, CancellationToken ct = default);
     Task<ApplicationDetailDto?> GetByIdAsync(int applicationId, CancellationToken ct = default);
-    Task ApproveAsync(int applicationId, int reviewerUserId, CancellationToken ct = default);
+    Task ApproveAsync(int applicationId, int reviewerUserId, int reviewerRoleId, Guid? officeId, CancellationToken ct = default);
     Task RejectAsync(int applicationId, int reviewerUserId, string reason, CancellationToken ct = default);
 
     // Settings + questions (SuperAdmin)

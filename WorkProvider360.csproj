@@ -7,7 +7,7 @@
     <!-- The class libraries live in subfolders of this Web SDK project. Exclude
          them from this project's default file globs so their sources (and their
          generated obj/ files) are not double-compiled into the API assembly. -->
-    <DefaultItemExcludes>$(DefaultItemExcludes);SaaS.Core\**;SaaS.DAL\**;SaaS.BLL\**</DefaultItemExcludes>
+    <DefaultItemExcludes>$(DefaultItemExcludes);SaaS.Core\**;SaaS.DAL\**;SaaS.BLL\**;AutomaticAzurefunction\**</DefaultItemExcludes>
   </PropertyGroup>
 
   <ItemGroup>
