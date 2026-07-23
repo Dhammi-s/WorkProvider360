@@ -103,4 +103,16 @@ public sealed class UsersController : BaseApiController
         await _users.ResendCredentialsAsync(id, ct);
         return Ok(ApiResponse.Ok("New credentials have been emailed to the user."));
     }
+
+    /// <summary>Resend credentials to many users at once (each gets a new temp password).</summary>
+    [Authorize(Roles = $"{RoleConstants.SuperAdmin},{RoleConstants.Admin}")]
+    [HttpPost("resend-credentials")]
+    public async Task<ActionResult<ApiResponse<BulkOperationResultDto>>> ResendCredentialsBulk(
+        [FromBody] BulkResendRequestDto request, CancellationToken ct)
+    {
+        var result = await _users.ResendCredentialsBulkAsync(request.UserIds, ct);
+        var message = $"Sent to {result.Succeeded} of {result.Total} user(s)"
+            + (result.Failed > 0 ? $"; {result.Failed} failed." : ".");
+        return Ok(ApiResponse<BulkOperationResultDto>.Ok(result, message));
+    }
 }

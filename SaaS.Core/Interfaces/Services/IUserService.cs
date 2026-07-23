@@ -18,6 +18,9 @@ public interface IUserService
     /// </summary>
     Task ResendCredentialsAsync(int userId, CancellationToken ct = default);
 
+    /// <summary>Resend credentials to many users; returns per-batch success/failure counts.</summary>
+    Task<BulkOperationResultDto> ResendCredentialsBulkAsync(IReadOnlyList<int> userIds, CancellationToken ct = default);
+
     /// <summary>
     /// Creates the first SuperAdmin for the current tenant. Fails if the tenant
     /// already has any user (so the endpoint self-disables after first use).

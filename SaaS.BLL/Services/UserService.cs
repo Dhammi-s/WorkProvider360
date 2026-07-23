@@ -128,6 +128,25 @@ public sealed class UserService : IUserService
         await _email.SendCredentialsAsync(user.Email, user.FullName, user.Email, newPassword, BuildLoginUrl(), ct);
     }
 
+    public async Task<BulkOperationResultDto> ResendCredentialsBulkAsync(IReadOnlyList<int> userIds, CancellationToken ct = default)
+    {
+        var ids = userIds.Distinct().ToList();
+        var result = new BulkOperationResultDto { Total = ids.Count };
+        foreach (var id in ids)
+        {
+            try
+            {
+                await ResendCredentialsAsync(id, ct);
+                result.Succeeded++;
+            }
+            catch
+            {
+                result.Failed++;
+            }
+        }
+        return result;
+    }
+
     private string BuildLoginUrl()
     {
         var baseUrl = (_smtp.ResetPasswordBaseUrl ?? string.Empty).Trim();

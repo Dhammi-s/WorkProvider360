@@ -40,6 +40,7 @@ public static class DependencyInjection
         services.AddScoped<IEmailLogRepository, EmailLogRepository>();
         services.AddScoped<ILogSettingsRepository, LogSettingsRepository>();
         services.AddScoped<IBrandingRepository, BrandingRepository>();
+        services.AddScoped<IAnnouncementRepository, AnnouncementRepository>();
 
         return services;
     }
