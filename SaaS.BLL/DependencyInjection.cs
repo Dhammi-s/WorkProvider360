@@ -1,5 +1,6 @@
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using SaaS.BLL.Payments;
 using SaaS.BLL.Security;
 using SaaS.BLL.Services;
 using SaaS.Core.Interfaces.Services;
@@ -32,6 +33,8 @@ public static class DependencyInjection
         services.AddScoped<IBrandingService, BrandingService>();
         services.AddScoped<IAnnouncementService, AnnouncementService>();
         services.AddScoped<IInvoiceService, InvoiceService>();
+        services.AddSingleton<IPaymentProvider, MockPaymentProvider>();
+        services.AddScoped<IPosService, PosService>();
 
         return services;
     }
