@@ -18,6 +18,9 @@ public sealed class SubmitApplicationRequestDto
     [Required]
     public int RequestedRoleId { get; set; }
 
+    /// <summary>Applicant's expected salary based on experience (optional).</summary>
+    public decimal? DesiredSalary { get; set; }
+
     public List<SubmitAnswerDto> Answers { get; set; } = new();
 }
 

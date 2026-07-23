@@ -26,4 +26,7 @@ public interface IEmailService
 
     /// <summary>Alerts an admin/manager that a user reported an injury on a schedule.</summary>
     Task SendScheduleInjuryReportAsync(string toAddress, string title, string reporterName, string message, CancellationToken ct = default);
+
+    /// <summary>Sends an invoice email with the PDF attached.</summary>
+    Task SendInvoiceAsync(string toAddress, string subject, string htmlBody, byte[] pdfBytes, string pdfFileName, CancellationToken ct = default);
 }

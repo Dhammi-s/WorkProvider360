@@ -63,6 +63,7 @@ public sealed class UserService : IUserService
             PasswordSalt = salt,
             RoleId = request.RoleId,
             OfficeId = request.OfficeId,
+            Salary = request.Salary,
             IsActive = true,
         };
 
@@ -122,10 +123,22 @@ public sealed class UserService : IUserService
             ?? throw AppException.NotFound("User not found.");
 
         var newPassword = GenerateTemporaryPassword();
+
+        // Send the email BEFORE changing the password: if the email can't be sent
+        // we leave the existing password intact (so the user isn't locked out) and
+        // surface the real reason instead of a generic 500.
+        try
+        {
+            await _email.SendCredentialsAsync(user.Email, user.FullName, user.Email, newPassword, BuildLoginUrl(), ct);
+        }
+        catch (Exception ex)
+        {
+            throw new AppException(
+                $"Could not send the email, so the password was left unchanged. {ex.Message}", 502);
+        }
+
         var (hash, salt) = _passwordHasher.HashPassword(newPassword);
         await _users.UpdatePasswordAsync(userId, hash, salt, ct);
-
-        await _email.SendCredentialsAsync(user.Email, user.FullName, user.Email, newPassword, BuildLoginUrl(), ct);
     }
 
     public async Task<BulkOperationResultDto> ResendCredentialsBulkAsync(IReadOnlyList<int> userIds, CancellationToken ct = default)
@@ -175,6 +188,7 @@ public sealed class UserService : IUserService
         RoleName = u.RoleName ?? string.Empty,
         OfficeId = u.OfficeId,
         OfficeName = u.OfficeName,
+        Salary = u.Salary,
         IsActive = u.IsActive,
         CreatedOn = u.CreatedOn,
     };

@@ -12,6 +12,7 @@ public sealed class UserDto
     public string RoleName { get; set; } = string.Empty;
     public Guid? OfficeId { get; set; }
     public string? OfficeName { get; set; }
+    public decimal? Salary { get; set; }
     public bool IsActive { get; set; }
     public DateTime CreatedOn { get; set; }
 }

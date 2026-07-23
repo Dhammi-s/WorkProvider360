@@ -15,6 +15,7 @@ public sealed class AppUser
     public string? RoleName { get; set; }
     public Guid? OfficeId { get; set; }
     public string? OfficeName { get; set; }
+    public decimal? Salary { get; set; }
     public bool IsActive { get; set; }
     public DateTime CreatedOn { get; set; }
     public DateTime? UpdatedOn { get; set; }

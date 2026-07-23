@@ -12,6 +12,7 @@ public sealed class RoleApplication
     public string? Address { get; set; }
     public int RequestedRoleId { get; set; }
     public string? RequestedRoleName { get; set; }
+    public decimal? DesiredSalary { get; set; }
     public string Status { get; set; } = "Pending";
     public string? RejectionReason { get; set; }
     public int? ReviewedByUserId { get; set; }

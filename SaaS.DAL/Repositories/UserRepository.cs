@@ -54,7 +54,8 @@ public sealed class UserRepository : IUserRepository
                     user.PasswordSalt,
                     user.RoleId,
                     user.IsActive,
-                    user.OfficeId
+                    user.OfficeId,
+                    user.Salary
                 },
                 commandType: CommandType.StoredProcedure, cancellationToken: ct));
     }
