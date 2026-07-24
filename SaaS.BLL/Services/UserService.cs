@@ -64,6 +64,7 @@ public sealed class UserService : IUserService
             RoleId = request.RoleId,
             OfficeId = request.OfficeId,
             Salary = request.Salary,
+            Phone = string.IsNullOrWhiteSpace(request.Phone) ? null : request.Phone.Trim(),
             IsActive = true,
         };
 
@@ -186,6 +187,7 @@ public sealed class UserService : IUserService
         FullName = u.FullName,
         RoleId = u.RoleId,
         RoleName = u.RoleName ?? string.Empty,
+        Phone = u.Phone,
         OfficeId = u.OfficeId,
         OfficeName = u.OfficeName,
         Salary = u.Salary,

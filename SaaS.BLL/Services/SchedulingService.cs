@@ -29,6 +29,7 @@ public sealed class SchedulingService : ISchedulingService
     private readonly ILocationBroadcaster _broadcaster;
     private readonly IUserService _users;
     private readonly IEmailService _email;
+    private readonly ISmsService _sms;
     private readonly ILogger<SchedulingService> _logger;
 
     public SchedulingService(
@@ -38,6 +39,7 @@ public sealed class SchedulingService : ISchedulingService
         ILocationBroadcaster broadcaster,
         IUserService users,
         IEmailService email,
+        ISmsService sms,
         ILogger<SchedulingService> logger)
     {
         _schedules = schedules;
@@ -46,6 +48,7 @@ public sealed class SchedulingService : ISchedulingService
         _broadcaster = broadcaster;
         _users = users;
         _email = email;
+        _sms = sms;
         _logger = logger;
     }
 
@@ -592,6 +595,22 @@ public sealed class SchedulingService : ISchedulingService
         catch (Exception ex)
         {
             _logger.LogError(ex, "Failed to send schedule-assigned email to {Email}.", assignee.Email);
+        }
+
+        // Also text them if they have a phone on file and SMS is configured.
+        if (!string.IsNullOrWhiteSpace(assignee.Phone))
+        {
+            try
+            {
+                var when = schedule.StartUtc.ToString("MMM d, h:mm tt");
+                await _sms.SendAsync(assignee.Phone!,
+                    $"Hi {assignee.FullName}, you've been assigned \"{schedule.Title}\" starting {when}. — WorkProvider360", ct);
+            }
+            catch (Exception ex)
+            {
+                // SMS is best-effort — never block schedule creation on it.
+                _logger.LogWarning(ex, "Failed to send schedule-assigned SMS to {Phone}.", assignee.Phone);
+            }
         }
 
         if (!notifyAdmin && !notifyManager) return;

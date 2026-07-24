@@ -55,7 +55,8 @@ public sealed class UserRepository : IUserRepository
                     user.RoleId,
                     user.IsActive,
                     user.OfficeId,
-                    user.Salary
+                    user.Salary,
+                    user.Phone
                 },
                 commandType: CommandType.StoredProcedure, cancellationToken: ct));
     }
