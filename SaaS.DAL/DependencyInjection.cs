@@ -38,6 +38,7 @@ public static class DependencyInjection
         services.AddScoped<IOfficeRepository, OfficeRepository>();
         services.AddScoped<ITimezoneRepository, TimezoneRepository>();
         services.AddScoped<IEmailLogRepository, EmailLogRepository>();
+        services.AddScoped<ISecurityEventRepository, SecurityEventRepository>();
         services.AddScoped<ILogSettingsRepository, LogSettingsRepository>();
         services.AddScoped<IBrandingRepository, BrandingRepository>();
         services.AddScoped<IAnnouncementRepository, AnnouncementRepository>();
