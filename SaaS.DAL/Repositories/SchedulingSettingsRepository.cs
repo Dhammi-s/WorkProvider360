@@ -30,7 +30,7 @@ public sealed class SchedulingSettingsRepository : ISchedulingSettingsRepository
                 commandType: CommandType.StoredProcedure, cancellationToken: ct));
     }
 
-    public async Task<SchedulingSettings> UpdateDefaultsAsync(decimal defaultPayRatePerHour, decimal defaultOvertimeMultiplier, bool notifyAdminOnCreate, bool notifyManagerOnCreate, CancellationToken ct = default)
+    public async Task<SchedulingSettings> UpdateDefaultsAsync(decimal defaultPayRatePerHour, decimal defaultOvertimeMultiplier, bool notifyAdminOnCreate, bool notifyManagerOnCreate, bool autoClockEnabled, CancellationToken ct = default)
     {
         using var db = await _connectionFactory.CreateTenantConnectionAsync(ct);
         return await db.QuerySingleAsync<SchedulingSettings>(
@@ -40,7 +40,8 @@ public sealed class SchedulingSettingsRepository : ISchedulingSettingsRepository
                     DefaultPayRatePerHour = defaultPayRatePerHour,
                     DefaultOvertimeMultiplier = defaultOvertimeMultiplier,
                     NotifyAdminOnCreate = notifyAdminOnCreate,
-                    NotifyManagerOnCreate = notifyManagerOnCreate
+                    NotifyManagerOnCreate = notifyManagerOnCreate,
+                    AutoClockEnabled = autoClockEnabled
                 },
                 commandType: CommandType.StoredProcedure, cancellationToken: ct));
     }

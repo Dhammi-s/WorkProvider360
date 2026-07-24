@@ -70,12 +70,24 @@ public sealed class SchedulingService : ISchedulingService
 
     public async Task<SchedulingSettingsDto> UpdateAccessAsync(UpdateSchedulingAccessDto request, int roleId, CancellationToken ct = default)
     {
-        if (roleId != RoleConstants.SuperAdminId)
-            throw AppException.Forbidden("Only a Super Admin can change scheduling access.");
+        // SuperAdmin sets both Admin and Manager access. Admin outranks Manager,
+        // so an Admin may set the Manager level only (their own level is preserved).
+        if (roleId == RoleConstants.SuperAdminId)
+        {
+            var savedBySuper = await _settings.UpdateAccessAsync(
+                CanonLevel(request.AdminAccess), CanonLevel(request.ManagerAccess), ct);
+            return MapSettings(savedBySuper);
+        }
 
-        var saved = await _settings.UpdateAccessAsync(
-            CanonLevel(request.AdminAccess), CanonLevel(request.ManagerAccess), ct);
-        return MapSettings(saved);
+        if (roleId == RoleConstants.AdminId)
+        {
+            var current = await _settings.GetAsync(ct);
+            var saved = await _settings.UpdateAccessAsync(
+                CanonLevel(current?.AdminAccess ?? Write), CanonLevel(request.ManagerAccess), ct);
+            return MapSettings(saved);
+        }
+
+        throw AppException.Forbidden("You do not have permission to change scheduling access.");
     }
 
     public async Task<SchedulingSettingsDto> UpdateDefaultsAsync(UpdateSchedulingDefaultsDto request, int roleId, CancellationToken ct = default)
@@ -88,6 +100,7 @@ public sealed class SchedulingService : ISchedulingService
             request.DefaultOvertimeMultiplier <= 0 ? 1.5m : request.DefaultOvertimeMultiplier,
             request.NotifyAdminOnCreate,
             request.NotifyManagerOnCreate,
+            request.AutoClockEnabled,
             ct);
         return MapSettings(saved);
     }
@@ -98,7 +111,10 @@ public sealed class SchedulingService : ISchedulingService
         EnsureCanManage(roleId, settings);
 
         var users = await _users.GetAllAsync(ct);
-        return users.Where(u => u.IsActive).ToList();
+        // You can only schedule people who rank strictly below you: Admin -> Manager/User,
+        // Manager -> User only, SuperAdmin -> anyone.
+        var myRank = RankOfRoleId(roleId);
+        return users.Where(u => u.IsActive && RankOfRoleName(u.RoleName) > myRank).ToList();
     }
 
     // --------------------------------------------------------------- Schedules
@@ -111,6 +127,8 @@ public sealed class SchedulingService : ISchedulingService
         if (level == None)
             throw AppException.Forbidden("You do not have access to the scheduler.");
 
+        await MaybeAutoClockAsync(settings, ct);
+
         // A regular User only ever sees their own schedules.
         var effectiveUserId = level == Self ? currentUserId : assignedUserId;
 
@@ -121,6 +139,7 @@ public sealed class SchedulingService : ISchedulingService
     public async Task<ScheduleDetailDto> GetScheduleAsync(int scheduleId, int currentUserId, int roleId, CancellationToken ct = default)
     {
         var settings = await _settings.GetAsync(ct);
+        await MaybeAutoClockAsync(settings, ct);
         var schedule = await _schedules.GetByIdAsync(scheduleId, ct)
             ?? throw AppException.NotFound("Schedule not found.");
 
@@ -147,6 +166,7 @@ public sealed class SchedulingService : ISchedulingService
             ?? throw AppException.BadRequest("The selected user does not exist.");
         if (!assignee.IsActive)
             throw AppException.BadRequest("The selected user is not active.");
+        EnsureCanScheduleFor(roleId, assignee);
 
         var id = await _schedules.CreateAsync(new Schedule
         {
@@ -181,6 +201,7 @@ public sealed class SchedulingService : ISchedulingService
 
         var assignee = await _users.GetByIdAsync(request.AssignedUserId, ct)
             ?? throw AppException.BadRequest("The selected user does not exist.");
+        EnsureCanScheduleFor(roleId, assignee);
 
         await _schedules.UpdateAsync(new Schedule
         {
@@ -304,6 +325,11 @@ public sealed class SchedulingService : ISchedulingService
         if (open is not null)
             throw AppException.BadRequest("You are already clocked in for this schedule.");
 
+        // Once a full clock-in/out cycle has been recorded the clock is frozen.
+        var existing = await _schedules.GetTimeEntriesAsync(scheduleId, ct);
+        if (schedule.Status == "Completed" || existing.Any(e => e.ClockOutUtc is not null))
+            throw AppException.BadRequest("This shift is already completed — the clock is locked.");
+
         await _schedules.ClockInAsync(scheduleId, currentUserId, ct);
 
         // Reflect that work has started (unless already completed/cancelled).
@@ -383,6 +409,7 @@ public sealed class SchedulingService : ISchedulingService
     public async Task<IReadOnlyList<TimeEntryDto>> GetTimeEntriesAsync(int scheduleId, int currentUserId, int roleId, CancellationToken ct = default)
     {
         var settings = await _settings.GetAsync(ct);
+        await MaybeAutoClockAsync(settings, ct);
         var schedule = await _schedules.GetByIdAsync(scheduleId, ct)
             ?? throw AppException.NotFound("Schedule not found.");
 
@@ -404,6 +431,8 @@ public sealed class SchedulingService : ISchedulingService
         var level = LevelForRole(roleId, settings);
         if (level == None)
             throw AppException.Forbidden("You do not have access to scheduling reports.");
+
+        await MaybeAutoClockAsync(settings, ct);
 
         var effectiveUserId = level == Self ? currentUserId : assignedUserId;
 
@@ -625,6 +654,39 @@ public sealed class SchedulingService : ISchedulingService
 
     // ------------------------------------------------------- Permission helpers
 
+    /// <summary>When the tenant has auto-clock on, lazily resolve missed, ended shifts.</summary>
+    private async Task MaybeAutoClockAsync(SchedulingSettings? settings, CancellationToken ct)
+    {
+        if (settings?.AutoClockEnabled != true) return;
+        await _schedules.ApplyAutoClockAsync(DateTime.UtcNow, ct);
+    }
+
+    /// <summary>Role rank: SuperAdmin=1 (highest) … User=4. Unknown roles rank lowest.</summary>
+    private static int RankOfRoleId(int roleId) => roleId switch
+    {
+        RoleConstants.SuperAdminId => 1,
+        RoleConstants.AdminId => 2,
+        RoleConstants.ManagerId => 3,
+        RoleConstants.UserId => 4,
+        _ => int.MaxValue,
+    };
+
+    private static int RankOfRoleName(string? roleName) => roleName switch
+    {
+        RoleConstants.SuperAdmin => 1,
+        RoleConstants.Admin => 2,
+        RoleConstants.Manager => 3,
+        RoleConstants.User => 4,
+        _ => int.MaxValue,
+    };
+
+    /// <summary>You may only schedule someone who ranks strictly below you.</summary>
+    private static void EnsureCanScheduleFor(int roleId, UserDto assignee)
+    {
+        if (RankOfRoleName(assignee.RoleName) <= RankOfRoleId(roleId))
+            throw AppException.Forbidden("You cannot schedule someone at or above your role.");
+    }
+
     private static string LevelForRole(int roleId, SchedulingSettings? settings)
     {
         if (roleId == RoleConstants.SuperAdminId) return Write;
@@ -675,7 +737,8 @@ public sealed class SchedulingService : ISchedulingService
         IsSuperAdmin = roleId == RoleConstants.SuperAdminId,
         CanViewAll = level is Read or Write,
         CanManage = level == Write,
-        CanManageAccess = roleId == RoleConstants.SuperAdminId,
+        // Admin outranks Manager and can set the Manager's access; SuperAdmin sets both.
+        CanManageAccess = roleId is RoleConstants.SuperAdminId or RoleConstants.AdminId,
         IsSelfScoped = level == Self,
     };
 
@@ -753,6 +816,7 @@ public sealed class SchedulingService : ISchedulingService
         DefaultOvertimeMultiplier = s?.DefaultOvertimeMultiplier ?? 1.5m,
         NotifyAdminOnCreate = s?.NotifyAdminOnCreate ?? false,
         NotifyManagerOnCreate = s?.NotifyManagerOnCreate ?? false,
+        AutoClockEnabled = s?.AutoClockEnabled ?? false,
         UpdatedOn = s?.UpdatedOn ?? DateTime.UtcNow,
     };
 }

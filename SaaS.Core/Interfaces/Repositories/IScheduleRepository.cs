@@ -25,6 +25,9 @@ public interface IScheduleRepository
     Task UpdateTimeEntryAsync(TimeEntry entry, CancellationToken ct = default);
     Task<IReadOnlyList<TimeEntry>> GetTimeEntriesAsync(int scheduleId, CancellationToken ct = default);
 
+    // Auto clock-in/out for missed, already-ended shifts (idempotent).
+    Task ApplyAutoClockAsync(DateTime nowUtc, CancellationToken ct = default);
+
     // Reporting
     Task<IReadOnlyList<ScheduleReportRow>> GetReportAsync(DateTime fromUtc, DateTime toUtc, int? assignedUserId, CancellationToken ct = default);
 }

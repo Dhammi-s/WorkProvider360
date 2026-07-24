@@ -14,4 +14,7 @@ public sealed class UpdateSchedulingDefaultsDto
     public bool NotifyAdminOnCreate { get; set; }
 
     public bool NotifyManagerOnCreate { get; set; }
+
+    /// <summary>Auto clock-in/out missed shifts once they end.</summary>
+    public bool AutoClockEnabled { get; set; }
 }

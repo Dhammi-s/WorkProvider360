@@ -171,6 +171,14 @@ public sealed class ScheduleRepository : IScheduleRepository
         return rows.AsList();
     }
 
+    public async Task ApplyAutoClockAsync(DateTime nowUtc, CancellationToken ct = default)
+    {
+        using var db = await _connectionFactory.CreateTenantConnectionAsync(ct);
+        await db.ExecuteAsync(
+            new CommandDefinition("usp_Schedule_ApplyAutoClock", new { NowUtc = nowUtc },
+                commandType: CommandType.StoredProcedure, cancellationToken: ct));
+    }
+
     // -------------------------------------------------------------- Reporting
 
     public async Task<IReadOnlyList<ScheduleReportRow>> GetReportAsync(DateTime fromUtc, DateTime toUtc, int? assignedUserId, CancellationToken ct = default)
