@@ -20,9 +20,6 @@ public sealed class UserService : IUserService
     private readonly ICloudinaryService _cloudinary;
     private readonly SmtpSettings _smtp;
 
-    // Cap the incoming data URI (~7MB of base64 text ≈ a ~5MB image).
-    private const int MaxAvatarChars = 7_000_000;
-
     public UserService(
         IUserRepository users,
         IRoleRepository roles,
@@ -44,8 +41,6 @@ public sealed class UserService : IUserService
     {
         if (string.IsNullOrWhiteSpace(imageBase64) || !imageBase64.StartsWith("data:image/", StringComparison.OrdinalIgnoreCase))
             throw AppException.BadRequest("Please provide a valid image.");
-        if (imageBase64.Length > MaxAvatarChars)
-            throw AppException.BadRequest("The image is too large. Please crop or use a smaller image (max ~5MB).");
 
         var user = await _users.GetByIdAsync(userId, ct)
             ?? throw AppException.NotFound("User not found.");
