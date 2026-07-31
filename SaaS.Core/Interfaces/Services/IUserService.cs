@@ -8,6 +8,7 @@ public interface IUserService
     Task<IReadOnlyList<UserDto>> GetAllAsync(CancellationToken ct = default);
     Task<PagedResultDto<UserDto>> GetPagedAsync(int page, int pageSize, string? roleName, Guid? officeId, bool noOffice, CancellationToken ct = default);
     Task<UserDto?> GetByIdAsync(int userId, CancellationToken ct = default);
+    Task<UserDto> UpdateAvatarAsync(int userId, string imageBase64, CancellationToken ct = default);
     Task<UserDto> CreateAsync(CreateUserRequestDto request, CancellationToken ct = default);
 
     /// <summary>Public self-registration: creates an active account with the "User" role.</summary>

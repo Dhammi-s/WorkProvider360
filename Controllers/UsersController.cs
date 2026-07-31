@@ -54,6 +54,15 @@ public sealed class UsersController : BaseApiController
             : Ok(ApiResponse<UserDto>.Ok(user));
     }
 
+    /// <summary>Any authenticated user can set their own profile photo (uploaded to Cloudinary).</summary>
+    [HttpPost("me/avatar")]
+    public async Task<ActionResult<ApiResponse<UserDto>>> UpdateAvatar(
+        [FromBody] UpdateAvatarRequestDto request, CancellationToken ct)
+    {
+        var updated = await _users.UpdateAvatarAsync(CurrentUserId, request.ImageBase64, ct);
+        return Ok(ApiResponse<UserDto>.Ok(updated, "Profile photo updated."));
+    }
+
     /// <summary>Only Admins / SuperAdmins can list all users in the tenant.</summary>
     [Authorize(Roles = $"{RoleConstants.SuperAdmin},{RoleConstants.Admin}")]
     [HttpGet]

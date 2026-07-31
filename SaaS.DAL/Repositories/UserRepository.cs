@@ -82,6 +82,15 @@ public sealed class UserRepository : IUserRepository
                 commandType: CommandType.StoredProcedure, cancellationToken: ct));
     }
 
+    public async Task UpdateAvatarAsync(int userId, string avatarUrl, CancellationToken ct = default)
+    {
+        using var db = await _connectionFactory.CreateTenantConnectionAsync(ct);
+        await db.ExecuteAsync(
+            new CommandDefinition("usp_User_UpdateAvatar",
+                new { UserId = userId, AvatarUrl = avatarUrl },
+                commandType: CommandType.StoredProcedure, cancellationToken: ct));
+    }
+
     public async Task<bool> EmailExistsAsync(string email, CancellationToken ct = default)
     {
         using var db = await _connectionFactory.CreateTenantConnectionAsync(ct);

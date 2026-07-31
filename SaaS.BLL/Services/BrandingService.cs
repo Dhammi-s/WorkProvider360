@@ -11,8 +11,13 @@ public sealed class BrandingService : IBrandingService
     private const int MaxLogoChars = 3_000_000;
 
     private readonly IBrandingRepository _branding;
+    private readonly ICloudinaryService _cloudinary;
 
-    public BrandingService(IBrandingRepository branding) => _branding = branding;
+    public BrandingService(IBrandingRepository branding, ICloudinaryService cloudinary)
+    {
+        _branding = branding;
+        _cloudinary = cloudinary;
+    }
 
     public async Task<BrandingDto> GetAsync(CancellationToken ct = default)
     {
@@ -31,7 +36,13 @@ public sealed class BrandingService : IBrandingService
         if (logoBase64.Length > MaxLogoChars)
             throw AppException.BadRequest("The image is too large. Please crop or use a smaller image.");
 
-        var saved = await _branding.UpsertLogoAsync(logoBase64, ct);
+        // When Cloudinary is configured, host the logo there and store its URL;
+        // otherwise fall back to storing the base64 data URI in the tenant DB.
+        var toStore = _cloudinary.IsConfigured
+            ? await _cloudinary.UploadImageAsync(logoBase64, "workprovider360/logos", ct)
+            : logoBase64;
+
+        var saved = await _branding.UpsertLogoAsync(toStore, ct);
         return new BrandingDto { LogoBase64 = saved.LogoBase64, UpdatedOn = saved.UpdatedOn };
     }
 }

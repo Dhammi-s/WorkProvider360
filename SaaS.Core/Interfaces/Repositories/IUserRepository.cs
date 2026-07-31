@@ -13,5 +13,6 @@ public interface IUserRepository
     Task<(IReadOnlyList<AppUser> Items, int Total)> GetPagedAsync(int page, int pageSize, string? roleName, Guid? officeId, bool noOffice, CancellationToken ct = default);
     Task<int> CreateAsync(AppUser user, CancellationToken ct = default);
     Task UpdatePasswordAsync(int userId, string passwordHash, string passwordSalt, CancellationToken ct = default);
+    Task UpdateAvatarAsync(int userId, string avatarUrl, CancellationToken ct = default);
     Task<bool> EmailExistsAsync(string email, CancellationToken ct = default);
 }
