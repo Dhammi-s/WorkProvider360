@@ -10,6 +10,7 @@ public interface IUserRepository
     Task<AppUser?> GetByEmailAsync(string email, CancellationToken ct = default);
     Task<AppUser?> GetByIdAsync(int userId, CancellationToken ct = default);
     Task<IReadOnlyList<AppUser>> GetAllAsync(CancellationToken ct = default);
+    Task<(IReadOnlyList<AppUser> Items, int Total)> GetPagedAsync(int page, int pageSize, string? roleName, Guid? officeId, bool noOffice, CancellationToken ct = default);
     Task<int> CreateAsync(AppUser user, CancellationToken ct = default);
     Task UpdatePasswordAsync(int userId, string passwordHash, string passwordSalt, CancellationToken ct = default);
     Task<bool> EmailExistsAsync(string email, CancellationToken ct = default);

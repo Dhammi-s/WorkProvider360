@@ -47,6 +47,15 @@ public sealed class ApplicationsController : BaseApiController
         return Ok(ApiResponse<IReadOnlyList<ApplicationListItemDto>>.Ok(apps));
     }
 
+    /// <summary>Server-side paged list of applications (optionally filtered by status).</summary>
+    [HttpGet("paged")]
+    public async Task<ActionResult<ApiResponse<PagedResultDto<ApplicationListItemDto>>>> GetPaged(
+        [FromQuery] string? status, [FromQuery] int page = 1, [FromQuery] int pageSize = 10, CancellationToken ct = default)
+    {
+        var result = await _applications.GetPagedAsync(status, page, pageSize, ct);
+        return Ok(ApiResponse<PagedResultDto<ApplicationListItemDto>>.Ok(result));
+    }
+
     [Authorize(Roles = $"{RoleConstants.SuperAdmin},{RoleConstants.Admin}")]
     [HttpGet("{id:int}")]
     public async Task<ActionResult<ApiResponse<ApplicationDetailDto>>> GetById(int id, CancellationToken ct)

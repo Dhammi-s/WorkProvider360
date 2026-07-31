@@ -6,6 +6,7 @@ namespace SaaS.Core.Interfaces.Services;
 public interface IUserService
 {
     Task<IReadOnlyList<UserDto>> GetAllAsync(CancellationToken ct = default);
+    Task<PagedResultDto<UserDto>> GetPagedAsync(int page, int pageSize, string? roleName, Guid? officeId, bool noOffice, CancellationToken ct = default);
     Task<UserDto?> GetByIdAsync(int userId, CancellationToken ct = default);
     Task<UserDto> CreateAsync(CreateUserRequestDto request, CancellationToken ct = default);
 

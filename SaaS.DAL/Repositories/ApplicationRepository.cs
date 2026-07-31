@@ -43,6 +43,17 @@ public sealed class ApplicationRepository : IApplicationRepository
         return rows.AsList();
     }
 
+    public async Task<(IReadOnlyList<RoleApplication> Items, int Total)> GetPagedAsync(string? status, int page, int pageSize, CancellationToken ct = default)
+    {
+        using var db = await _connectionFactory.CreateTenantConnectionAsync(ct);
+        using var multi = await db.QueryMultipleAsync(
+            new CommandDefinition("usp_RoleApplication_GetPaged", new { Status = status, Page = page, PageSize = pageSize },
+                commandType: CommandType.StoredProcedure, cancellationToken: ct));
+        var items = (await multi.ReadAsync<RoleApplication>()).AsList();
+        var total = await multi.ReadFirstAsync<int>();
+        return (items, total);
+    }
+
     public async Task<RoleApplication?> GetByIdAsync(int applicationId, CancellationToken ct = default)
     {
         using var db = await _connectionFactory.CreateTenantConnectionAsync(ct);
