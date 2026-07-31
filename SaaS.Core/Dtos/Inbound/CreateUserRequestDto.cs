@@ -16,6 +16,13 @@ public sealed class CreateUserRequestDto
     [Required]
     public int RoleId { get; set; }
 
+    /// <summary>Optional mobile number for SMS notifications, e.g. "+15551234567".</summary>
+    [Phone]
+    public string? Phone { get; set; }
+
     /// <summary>Office the user belongs to. Optional for SuperAdmin-created accounts.</summary>
     public Guid? OfficeId { get; set; }
+
+    /// <summary>Salary for Admin/Manager accounts (used by the accounting/payroll flow).</summary>
+    public decimal? Salary { get; set; }
 }

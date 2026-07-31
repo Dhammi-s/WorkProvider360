@@ -26,7 +26,14 @@ public sealed class EmailService : IEmailService
         _logger = logger;
     }
 
-    public async Task SendAsync(string toAddress, string subject, string htmlBody, CancellationToken ct = default)
+    public Task SendAsync(string toAddress, string subject, string htmlBody, CancellationToken ct = default)
+        => SendCoreAsync(toAddress, subject, htmlBody, null, null, ct);
+
+    /// <summary>Sends an email with a PDF attachment (e.g. an invoice).</summary>
+    public Task SendInvoiceAsync(string toAddress, string subject, string htmlBody, byte[] pdfBytes, string pdfFileName, CancellationToken ct = default)
+        => SendCoreAsync(toAddress, subject, htmlBody, pdfBytes, pdfFileName, ct);
+
+    private async Task SendCoreAsync(string toAddress, string subject, string htmlBody, byte[]? attachmentBytes, string? attachmentName, CancellationToken ct)
     {
         using var message = new MailMessage
         {
@@ -36,6 +43,13 @@ public sealed class EmailService : IEmailService
             IsBodyHtml = true,
         };
         message.To.Add(toAddress);
+
+        Attachment? attachment = null;
+        if (attachmentBytes is { Length: > 0 } && !string.IsNullOrWhiteSpace(attachmentName))
+        {
+            attachment = new Attachment(new MemoryStream(attachmentBytes), attachmentName, "application/pdf");
+            message.Attachments.Add(attachment);
+        }
 
         using var client = new SmtpClient(_settings.Host, _settings.Port)
         {
@@ -55,6 +69,10 @@ public sealed class EmailService : IEmailService
             _logger.LogError(ex, "Failed to send email to {ToAddress}", toAddress);
             await RecordAsync(toAddress, subject, htmlBody, "Failed", ex.Message, ct);
             throw;
+        }
+        finally
+        {
+            attachment?.Dispose();
         }
     }
 

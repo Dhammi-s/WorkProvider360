@@ -38,17 +38,37 @@ public sealed class LogService : ILogService
             throw AppException.Forbidden("You do not have access to the logs.");
 
         var logs = await _emailLog.GetRecentAsync(Math.Clamp(top, 1, MaxLogs), ct);
-        return logs.Select(l => new EmailLogDto
-        {
-            EmailLogId = l.EmailLogId,
-            ToAddress = l.ToAddress,
-            Subject = l.Subject,
-            Body = l.Body,
-            Status = l.Status,
-            ErrorMessage = l.ErrorMessage,
-            CreatedOn = l.CreatedOn,
-        }).ToList();
+        return logs.Select(MapLog).ToList();
     }
+
+    public async Task<PagedResultDto<EmailLogDto>> GetEmailLogsPagedAsync(int roleId, int page, int pageSize, CancellationToken ct = default)
+    {
+        var settings = await _settings.GetAsync(ct);
+        if (!CanView(roleId, settings))
+            throw AppException.Forbidden("You do not have access to the logs.");
+
+        page = Math.Max(1, page);
+        pageSize = Math.Clamp(pageSize, 1, 100);
+        var (items, total) = await _emailLog.GetPagedAsync(page, pageSize, ct);
+        return new PagedResultDto<EmailLogDto>
+        {
+            Items = items.Select(MapLog).ToList(),
+            Total = total,
+            Page = page,
+            PageSize = pageSize,
+        };
+    }
+
+    private static EmailLogDto MapLog(EmailLog l) => new()
+    {
+        EmailLogId = l.EmailLogId,
+        ToAddress = l.ToAddress,
+        Subject = l.Subject,
+        Body = l.Body,
+        Status = l.Status,
+        ErrorMessage = l.ErrorMessage,
+        CreatedOn = l.CreatedOn,
+    };
 
     public async Task<LogSettingsDto> GetSettingsAsync(CancellationToken ct = default)
     {

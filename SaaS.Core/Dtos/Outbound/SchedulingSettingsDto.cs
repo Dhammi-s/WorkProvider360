@@ -8,5 +8,6 @@ public sealed class SchedulingSettingsDto
     public decimal DefaultOvertimeMultiplier { get; set; } = 1.5m;
     public bool NotifyAdminOnCreate { get; set; }
     public bool NotifyManagerOnCreate { get; set; }
+    public bool AutoClockEnabled { get; set; }
     public DateTime UpdatedOn { get; set; }
 }

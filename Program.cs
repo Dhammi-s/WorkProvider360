@@ -136,6 +136,10 @@ app.UseMiddleware<TenantResolutionMiddleware>();
 
 app.UseAuthorization();
 
+// Security monitoring: runs after tenant resolution + authorization so it can
+// see the real client IP, the resolved tenant, and the final 401/403 status.
+app.UseMiddleware<SecurityAuditMiddleware>();
+
 app.MapControllers();
 app.MapHub<LocationHub>("/hubs/location");
 

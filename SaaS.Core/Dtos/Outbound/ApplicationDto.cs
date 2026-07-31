@@ -8,6 +8,7 @@ public sealed class ApplicationListItemDto
     public string Email { get; set; } = string.Empty;
     public int RequestedRoleId { get; set; }
     public string RequestedRoleName { get; set; } = string.Empty;
+    public decimal? DesiredSalary { get; set; }
     public string Status { get; set; } = string.Empty;
     public DateTime CreatedOn { get; set; }
 }
@@ -22,6 +23,7 @@ public sealed class ApplicationDetailDto
     public string? Address { get; set; }
     public int RequestedRoleId { get; set; }
     public string RequestedRoleName { get; set; } = string.Empty;
+    public decimal? DesiredSalary { get; set; }
     public string Status { get; set; } = string.Empty;
     public string? RejectionReason { get; set; }
     public DateTime? ReviewedOn { get; set; }

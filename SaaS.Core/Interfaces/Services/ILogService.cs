@@ -11,6 +11,7 @@ public interface ILogService
 {
     Task<LogAccessDto> GetAccessAsync(int roleId, CancellationToken ct = default);
     Task<IReadOnlyList<EmailLogDto>> GetEmailLogsAsync(int roleId, int top, CancellationToken ct = default);
+    Task<PagedResultDto<EmailLogDto>> GetEmailLogsPagedAsync(int roleId, int page, int pageSize, CancellationToken ct = default);
     Task<LogSettingsDto> GetSettingsAsync(CancellationToken ct = default);
     Task<LogSettingsDto> UpdateSettingsAsync(UpdateLogSettingsDto request, CancellationToken ct = default);
 }

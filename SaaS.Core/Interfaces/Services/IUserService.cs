@@ -6,6 +6,7 @@ namespace SaaS.Core.Interfaces.Services;
 public interface IUserService
 {
     Task<IReadOnlyList<UserDto>> GetAllAsync(CancellationToken ct = default);
+    Task<PagedResultDto<UserDto>> GetPagedAsync(int page, int pageSize, string? roleName, Guid? officeId, bool noOffice, CancellationToken ct = default);
     Task<UserDto?> GetByIdAsync(int userId, CancellationToken ct = default);
     Task<UserDto> CreateAsync(CreateUserRequestDto request, CancellationToken ct = default);
 
@@ -17,6 +18,9 @@ public interface IUserService
     /// Used by admins to re-send login details (the original password is not recoverable).
     /// </summary>
     Task ResendCredentialsAsync(int userId, CancellationToken ct = default);
+
+    /// <summary>Resend credentials to many users; returns per-batch success/failure counts.</summary>
+    Task<BulkOperationResultDto> ResendCredentialsBulkAsync(IReadOnlyList<int> userIds, CancellationToken ct = default);
 
     /// <summary>
     /// Creates the first SuperAdmin for the current tenant. Fails if the tenant

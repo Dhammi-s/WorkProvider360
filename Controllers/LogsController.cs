@@ -35,6 +35,15 @@ public sealed class LogsController : BaseApiController
         return Ok(ApiResponse<IReadOnlyList<EmailLogDto>>.Ok(logs));
     }
 
+    /// <summary>Server-side paged email logs.</summary>
+    [HttpGet("emails/paged")]
+    public async Task<ActionResult<ApiResponse<PagedResultDto<EmailLogDto>>>> EmailsPaged(
+        [FromQuery] int page = 1, [FromQuery] int pageSize = 10, CancellationToken ct = default)
+    {
+        var result = await _logs.GetEmailLogsPagedAsync(CurrentRoleId, page, pageSize, ct);
+        return Ok(ApiResponse<PagedResultDto<EmailLogDto>>.Ok(result));
+    }
+
     [Authorize(Roles = RoleConstants.SuperAdmin)]
     [HttpGet("settings")]
     public async Task<ActionResult<ApiResponse<LogSettingsDto>>> GetSettings(CancellationToken ct)
