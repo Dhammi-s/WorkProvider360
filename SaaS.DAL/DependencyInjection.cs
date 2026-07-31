@@ -41,6 +41,7 @@ public static class DependencyInjection
         services.AddScoped<ISecurityEventRepository, SecurityEventRepository>();
         services.AddScoped<ILogSettingsRepository, LogSettingsRepository>();
         services.AddScoped<IBrandingRepository, BrandingRepository>();
+        services.AddScoped<ILoginContentRepository, LoginContentRepository>();
         services.AddScoped<IAnnouncementRepository, AnnouncementRepository>();
         services.AddScoped<IInvoiceRepository, InvoiceRepository>();
         services.AddScoped<IPosRepository, PosRepository>();

@@ -36,6 +36,7 @@ public static class DependencyInjection
         services.AddScoped<IOfficeService, OfficeService>();
         services.AddScoped<ILogService, LogService>();
         services.AddScoped<IBrandingService, BrandingService>();
+        services.AddScoped<ILoginContentService, LoginContentService>();
         services.AddScoped<IAnnouncementService, AnnouncementService>();
         services.AddScoped<IInvoiceService, InvoiceService>();
         services.AddSingleton<IPaymentProvider, MockPaymentProvider>();
