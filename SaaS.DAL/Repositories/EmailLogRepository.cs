@@ -37,4 +37,15 @@ public sealed class EmailLogRepository : IEmailLogRepository
                 commandType: CommandType.StoredProcedure, cancellationToken: ct));
         return rows.AsList();
     }
+
+    public async Task<(IReadOnlyList<EmailLog> Items, int Total)> GetPagedAsync(int page, int pageSize, CancellationToken ct = default)
+    {
+        using var db = await _connectionFactory.CreateTenantConnectionAsync(ct);
+        using var multi = await db.QueryMultipleAsync(
+            new CommandDefinition("usp_EmailLog_GetPaged", new { Page = page, PageSize = pageSize },
+                commandType: CommandType.StoredProcedure, cancellationToken: ct));
+        var items = (await multi.ReadAsync<EmailLog>()).AsList();
+        var total = await multi.ReadFirstAsync<int>();
+        return (items, total);
+    }
 }

@@ -63,6 +63,18 @@ public sealed class UsersController : BaseApiController
         return Ok(ApiResponse<IReadOnlyList<UserDto>>.Ok(users));
     }
 
+    /// <summary>Server-side paged list of users.</summary>
+    [Authorize(Roles = $"{RoleConstants.SuperAdmin},{RoleConstants.Admin}")]
+    [HttpGet("paged")]
+    public async Task<ActionResult<ApiResponse<PagedResultDto<UserDto>>>> GetPaged(
+        [FromQuery] int page = 1, [FromQuery] int pageSize = 10,
+        [FromQuery] string? role = null, [FromQuery] Guid? officeId = null, [FromQuery] bool noOffice = false,
+        CancellationToken ct = default)
+    {
+        var result = await _users.GetPagedAsync(page, pageSize, role, officeId, noOffice, ct);
+        return Ok(ApiResponse<PagedResultDto<UserDto>>.Ok(result));
+    }
+
     /// <summary>Only Admins / SuperAdmins can create users.</summary>
     [Authorize(Roles = $"{RoleConstants.SuperAdmin},{RoleConstants.Admin}")]
     [HttpPost]

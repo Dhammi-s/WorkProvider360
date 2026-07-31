@@ -10,6 +10,7 @@ public sealed class UserDto
     public string FullName { get; set; } = string.Empty;
     public int RoleId { get; set; }
     public string RoleName { get; set; } = string.Empty;
+    public string? Phone { get; set; }
     public Guid? OfficeId { get; set; }
     public string? OfficeName { get; set; }
     public decimal? Salary { get; set; }

@@ -41,6 +41,18 @@ public sealed class UserRepository : IUserRepository
         return users.AsList();
     }
 
+    public async Task<(IReadOnlyList<AppUser> Items, int Total)> GetPagedAsync(int page, int pageSize, string? roleName, Guid? officeId, bool noOffice, CancellationToken ct = default)
+    {
+        using var db = await _connectionFactory.CreateTenantConnectionAsync(ct);
+        using var multi = await db.QueryMultipleAsync(
+            new CommandDefinition("usp_User_GetPaged",
+                new { Page = page, PageSize = pageSize, RoleName = roleName, OfficeId = officeId, NoOffice = noOffice },
+                commandType: CommandType.StoredProcedure, cancellationToken: ct));
+        var items = (await multi.ReadAsync<AppUser>()).AsList();
+        var total = await multi.ReadFirstAsync<int>();
+        return (items, total);
+    }
+
     public async Task<int> CreateAsync(AppUser user, CancellationToken ct = default)
     {
         using var db = await _connectionFactory.CreateTenantConnectionAsync(ct);
@@ -55,7 +67,8 @@ public sealed class UserRepository : IUserRepository
                     user.RoleId,
                     user.IsActive,
                     user.OfficeId,
-                    user.Salary
+                    user.Salary,
+                    user.Phone
                 },
                 commandType: CommandType.StoredProcedure, cancellationToken: ct));
     }

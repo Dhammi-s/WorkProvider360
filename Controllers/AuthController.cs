@@ -1,8 +1,10 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using SaaS.Core.Constants;
 using SaaS.Core.Dtos.Inbound;
 using SaaS.Core.Dtos.Outbound;
 using SaaS.Core.Interfaces.Services;
+using WebApplication1.Infrastructure;
 
 namespace WebApplication1.Controllers;
 
@@ -13,16 +15,34 @@ namespace WebApplication1.Controllers;
 public sealed class AuthController : BaseApiController
 {
     private readonly IAuthService _auth;
+    private readonly ISecurityAuditService _security;
 
-    public AuthController(IAuthService auth) => _auth = auth;
+    public AuthController(IAuthService auth, ISecurityAuditService security)
+    {
+        _auth = auth;
+        _security = security;
+    }
 
     [AllowAnonymous]
     [HttpPost("login")]
     public async Task<ActionResult<ApiResponse<AuthResponseDto>>> Login(
         [FromBody] LoginRequestDto request, CancellationToken ct)
     {
-        var result = await _auth.LoginAsync(request, ct);
-        return Ok(ApiResponse<AuthResponseDto>.Ok(result, "Login successful."));
+        var ip = HttpContext.GetRealIpAddress();
+        var userAgent = Request.Headers.UserAgent.ToString();
+        try
+        {
+            var result = await _auth.LoginAsync(request, ct);
+            await _security.LogAsync(SecurityEventTypes.LoginSuccess, email: request.Email,
+                ipAddress: ip, userAgent: userAgent, path: "/api/auth/login", ct: ct);
+            return Ok(ApiResponse<AuthResponseDto>.Ok(result, "Login successful."));
+        }
+        catch (Exception ex)
+        {
+            await _security.LogAsync(SecurityEventTypes.LoginFailed, email: request.Email,
+                ipAddress: ip, userAgent: userAgent, path: "/api/auth/login", detail: ex.Message, ct: ct);
+            throw;
+        }
     }
 
     [AllowAnonymous]

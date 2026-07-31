@@ -143,6 +143,30 @@ public sealed class ApplicationService : IApplicationService
         }).ToList();
     }
 
+    public async Task<PagedResultDto<ApplicationListItemDto>> GetPagedAsync(string? status, int page, int pageSize, CancellationToken ct = default)
+    {
+        page = Math.Max(1, page);
+        pageSize = Math.Clamp(pageSize, 1, 100);
+        var (items, total) = await _applications.GetPagedAsync(status, page, pageSize, ct);
+        return new PagedResultDto<ApplicationListItemDto>
+        {
+            Items = items.Select(a => new ApplicationListItemDto
+            {
+                ApplicationId = a.ApplicationId,
+                FullName = a.FullName,
+                Email = a.Email,
+                RequestedRoleId = a.RequestedRoleId,
+                RequestedRoleName = a.RequestedRoleName ?? string.Empty,
+                DesiredSalary = a.DesiredSalary,
+                Status = a.Status,
+                CreatedOn = a.CreatedOn,
+            }).ToList(),
+            Total = total,
+            Page = page,
+            PageSize = pageSize,
+        };
+    }
+
     public async Task<ApplicationDetailDto?> GetByIdAsync(int applicationId, CancellationToken ct = default)
     {
         var app = await _applications.GetByIdAsync(applicationId, ct);

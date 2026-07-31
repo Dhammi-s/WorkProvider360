@@ -39,6 +39,20 @@ public sealed class UserService : IUserService
         return users.Select(Map).ToList();
     }
 
+    public async Task<PagedResultDto<UserDto>> GetPagedAsync(int page, int pageSize, string? roleName, Guid? officeId, bool noOffice, CancellationToken ct = default)
+    {
+        page = Math.Max(1, page);
+        pageSize = Math.Clamp(pageSize, 1, 100);
+        var (items, total) = await _users.GetPagedAsync(page, pageSize, roleName, officeId, noOffice, ct);
+        return new PagedResultDto<UserDto>
+        {
+            Items = items.Select(Map).ToList(),
+            Total = total,
+            Page = page,
+            PageSize = pageSize,
+        };
+    }
+
     public async Task<UserDto?> GetByIdAsync(int userId, CancellationToken ct = default)
     {
         var user = await _users.GetByIdAsync(userId, ct);
@@ -64,6 +78,7 @@ public sealed class UserService : IUserService
             RoleId = request.RoleId,
             OfficeId = request.OfficeId,
             Salary = request.Salary,
+            Phone = string.IsNullOrWhiteSpace(request.Phone) ? null : request.Phone.Trim(),
             IsActive = true,
         };
 
@@ -186,6 +201,7 @@ public sealed class UserService : IUserService
         FullName = u.FullName,
         RoleId = u.RoleId,
         RoleName = u.RoleName ?? string.Empty,
+        Phone = u.Phone,
         OfficeId = u.OfficeId,
         OfficeName = u.OfficeName,
         Salary = u.Salary,
