@@ -1,6 +1,5 @@
-using System.Security.Cryptography;
-using System.Text;
-using System.Text.Json;
+using CloudinaryDotNet;
+using CloudinaryDotNet.Actions;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using SaaS.Core.Exceptions;
@@ -10,13 +9,12 @@ using SaaS.Core.Settings;
 namespace SaaS.BLL.Services;
 
 /// <summary>
-/// Signed Cloudinary uploads over a plain HttpClient (no SDK dependency).
-/// The signature is SHA-1 of the alphabetically-sorted params + the API secret.
+/// Uploads images to Cloudinary using the official SDK (handles signing). The
+/// incoming value is a base64 data URI (data:image/...;base64,....) from the
+/// cropped image; it is decoded to bytes and uploaded.
 /// </summary>
 public sealed class CloudinaryService : ICloudinaryService
 {
-    private static readonly HttpClient _http = new();
-
     private readonly CloudinarySettings _settings;
     private readonly ILogger<CloudinaryService> _logger;
 
@@ -35,72 +33,69 @@ public sealed class CloudinaryService : ICloudinaryService
         if (string.IsNullOrWhiteSpace(dataUri))
             throw AppException.BadRequest("No image was provided.");
 
-        var timestamp = DateTimeOffset.UtcNow.ToUnixTimeSeconds().ToString();
+        var (bytes, extension) = DecodeDataUri(dataUri);
 
-        // Params to sign (everything except file, api_key, signature), sorted alphabetically.
-        var signature = Sha1Hex($"folder={folder}&timestamp={timestamp}{_settings.ApiSecret}");
-
-        using var form = new MultipartFormDataContent
+        var cloudinary = new Cloudinary(new Account(_settings.CloudName, _settings.ApiKey, _settings.ApiSecret))
         {
-            { new StringContent(dataUri), "file" },
-            { new StringContent(_settings.ApiKey), "api_key" },
-            { new StringContent(timestamp), "timestamp" },
-            { new StringContent(folder), "folder" },
-            { new StringContent(signature), "signature" },
+            Api = { Secure = true },
         };
 
-        var url = $"https://api.cloudinary.com/v1_1/{_settings.CloudName}/image/upload";
-        HttpResponseMessage response;
+        using var stream = new MemoryStream(bytes);
+        var uploadParams = new ImageUploadParams
+        {
+            File = new FileDescription($"upload.{extension}", stream),
+            Folder = folder,
+            UniqueFilename = true,
+            Overwrite = false,
+        };
+
+        UploadResult result;
         try
         {
-            response = await _http.PostAsync(url, form, ct);
+            result = await cloudinary.UploadAsync(uploadParams, ct);
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Cloudinary upload request failed.");
+            _logger.LogError(ex, "Cloudinary upload failed.");
             throw new AppException($"Could not reach the image host: {ex.Message}", 502);
         }
 
-        var payload = await response.Content.ReadAsStringAsync(ct);
-        if (!response.IsSuccessStatusCode)
+        if (result.Error is not null)
         {
-            _logger.LogError("Cloudinary rejected upload: {Status} {Body}", (int)response.StatusCode, payload);
-            throw AppException.BadRequest($"Image upload failed: {ReadError(payload)}");
+            _logger.LogError("Cloudinary rejected upload: {Message}", result.Error.Message);
+            throw AppException.BadRequest($"Image upload failed: {result.Error.Message}");
         }
 
-        var secureUrl = ReadString(payload, "secure_url");
-        if (string.IsNullOrEmpty(secureUrl))
+        var url = result.SecureUrl?.ToString();
+        if (string.IsNullOrEmpty(url))
             throw new AppException("The image host did not return a URL.", 502);
-        return secureUrl;
+        return url;
     }
 
-    private static string Sha1Hex(string value)
+    /// <summary>Splits a "data:image/png;base64,AAAA" URI into raw bytes + a file extension.</summary>
+    private static (byte[] Bytes, string Extension) DecodeDataUri(string dataUri)
     {
-        var bytes = SHA1.HashData(Encoding.UTF8.GetBytes(value));
-        var sb = new StringBuilder(bytes.Length * 2);
-        foreach (var b in bytes) sb.Append(b.ToString("x2"));
-        return sb.ToString();
-    }
+        var comma = dataUri.IndexOf(',');
+        var header = comma >= 0 ? dataUri[..comma] : string.Empty;
+        var base64 = comma >= 0 ? dataUri[(comma + 1)..] : dataUri;
 
-    private static string ReadString(string json, string prop)
-    {
+        var extension = "png";
+        var slash = header.IndexOf("image/", StringComparison.OrdinalIgnoreCase);
+        if (slash >= 0)
+        {
+            var rest = header[(slash + 6)..];
+            var semi = rest.IndexOf(';');
+            var mime = (semi >= 0 ? rest[..semi] : rest).Trim();
+            if (!string.IsNullOrEmpty(mime)) extension = mime == "jpeg" ? "jpg" : mime;
+        }
+
         try
         {
-            using var doc = JsonDocument.Parse(json);
-            return doc.RootElement.TryGetProperty(prop, out var v) ? v.GetString() ?? string.Empty : string.Empty;
+            return (Convert.FromBase64String(base64), extension);
         }
-        catch { return string.Empty; }
-    }
-
-    private static string ReadError(string json)
-    {
-        try
+        catch (FormatException)
         {
-            using var doc = JsonDocument.Parse(json);
-            return doc.RootElement.TryGetProperty("error", out var e) && e.TryGetProperty("message", out var m)
-                ? m.GetString() ?? "unknown error"
-                : "unknown error";
+            throw AppException.BadRequest("The image data is not valid base64.");
         }
-        catch { return "unknown error"; }
     }
 }

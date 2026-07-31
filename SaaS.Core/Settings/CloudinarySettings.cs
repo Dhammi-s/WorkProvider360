@@ -16,5 +16,7 @@ public sealed class CloudinarySettings
     public bool IsConfigured =>
         !string.IsNullOrWhiteSpace(CloudName)
         && !string.IsNullOrWhiteSpace(ApiKey)
-        && !string.IsNullOrWhiteSpace(ApiSecret);
+        && !string.IsNullOrWhiteSpace(ApiSecret)
+        && !ApiKey.StartsWith("YOUR_", StringComparison.OrdinalIgnoreCase)
+        && !ApiSecret.StartsWith("YOUR_", StringComparison.OrdinalIgnoreCase);
 }
