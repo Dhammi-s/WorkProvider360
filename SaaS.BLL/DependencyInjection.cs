@@ -29,12 +29,14 @@ public static class DependencyInjection
         services.Configure<StripeSettings>(configuration.GetSection(StripeSettings.SectionName));
         services.Configure<TwilioSettings>(configuration.GetSection(TwilioSettings.SectionName));
         services.Configure<CloudinarySettings>(configuration.GetSection(CloudinarySettings.SectionName));
+        services.Configure<LlmSettings>(configuration.GetSection(LlmSettings.SectionName));
 
         services.AddSingleton<IPasswordHasher, Sha512PasswordHasher>();
         services.AddSingleton<IJwtTokenService, JwtTokenService>();
         services.AddScoped<IEmailService, EmailService>();
         services.AddScoped<ISmsService, SmsService>();
         services.AddScoped<ICloudinaryService, CloudinaryService>();
+        services.AddScoped<IChatbotService, ChatbotService>();
         services.AddScoped<ISecurityAuditService, SecurityAuditService>();
         services.AddScoped<IAuthService, AuthService>();
         services.AddScoped<IUserService, UserService>();
