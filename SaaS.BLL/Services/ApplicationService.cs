@@ -99,6 +99,7 @@ public sealed class ApplicationService : IApplicationService
             Phone = request.Phone,
             Address = request.Address,
             RequestedRoleId = request.RequestedRoleId,
+            DesiredSalary = request.DesiredSalary,
         };
         var applicationId = await _applications.CreateAsync(application, ct);
 
@@ -136,9 +137,34 @@ public sealed class ApplicationService : IApplicationService
             Email = a.Email,
             RequestedRoleId = a.RequestedRoleId,
             RequestedRoleName = a.RequestedRoleName ?? string.Empty,
+            DesiredSalary = a.DesiredSalary,
             Status = a.Status,
             CreatedOn = a.CreatedOn,
         }).ToList();
+    }
+
+    public async Task<PagedResultDto<ApplicationListItemDto>> GetPagedAsync(string? status, int page, int pageSize, CancellationToken ct = default)
+    {
+        page = Math.Max(1, page);
+        pageSize = Math.Clamp(pageSize, 1, 100);
+        var (items, total) = await _applications.GetPagedAsync(status, page, pageSize, ct);
+        return new PagedResultDto<ApplicationListItemDto>
+        {
+            Items = items.Select(a => new ApplicationListItemDto
+            {
+                ApplicationId = a.ApplicationId,
+                FullName = a.FullName,
+                Email = a.Email,
+                RequestedRoleId = a.RequestedRoleId,
+                RequestedRoleName = a.RequestedRoleName ?? string.Empty,
+                DesiredSalary = a.DesiredSalary,
+                Status = a.Status,
+                CreatedOn = a.CreatedOn,
+            }).ToList(),
+            Total = total,
+            Page = page,
+            PageSize = pageSize,
+        };
     }
 
     public async Task<ApplicationDetailDto?> GetByIdAsync(int applicationId, CancellationToken ct = default)
@@ -156,6 +182,7 @@ public sealed class ApplicationService : IApplicationService
             Address = app.Address,
             RequestedRoleId = app.RequestedRoleId,
             RequestedRoleName = app.RequestedRoleName ?? string.Empty,
+            DesiredSalary = app.DesiredSalary,
             Status = app.Status,
             RejectionReason = app.RejectionReason,
             ReviewedOn = app.ReviewedOn,
@@ -194,6 +221,7 @@ public sealed class ApplicationService : IApplicationService
             Password = tempPassword,
             RoleId = app.RequestedRoleId,
             OfficeId = assignedOffice,
+            Salary = app.DesiredSalary,
         }, ct);
 
         await _applications.UpdateStatusAsync(applicationId, "Approved", null, reviewerUserId, ct);

@@ -39,6 +39,20 @@ public sealed class UserService : IUserService
         return users.Select(Map).ToList();
     }
 
+    public async Task<PagedResultDto<UserDto>> GetPagedAsync(int page, int pageSize, string? roleName, Guid? officeId, bool noOffice, CancellationToken ct = default)
+    {
+        page = Math.Max(1, page);
+        pageSize = Math.Clamp(pageSize, 1, 100);
+        var (items, total) = await _users.GetPagedAsync(page, pageSize, roleName, officeId, noOffice, ct);
+        return new PagedResultDto<UserDto>
+        {
+            Items = items.Select(Map).ToList(),
+            Total = total,
+            Page = page,
+            PageSize = pageSize,
+        };
+    }
+
     public async Task<UserDto?> GetByIdAsync(int userId, CancellationToken ct = default)
     {
         var user = await _users.GetByIdAsync(userId, ct);
@@ -63,6 +77,8 @@ public sealed class UserService : IUserService
             PasswordSalt = salt,
             RoleId = request.RoleId,
             OfficeId = request.OfficeId,
+            Salary = request.Salary,
+            Phone = string.IsNullOrWhiteSpace(request.Phone) ? null : request.Phone.Trim(),
             IsActive = true,
         };
 
@@ -122,10 +138,41 @@ public sealed class UserService : IUserService
             ?? throw AppException.NotFound("User not found.");
 
         var newPassword = GenerateTemporaryPassword();
+
+        // Send the email BEFORE changing the password: if the email can't be sent
+        // we leave the existing password intact (so the user isn't locked out) and
+        // surface the real reason instead of a generic 500.
+        try
+        {
+            await _email.SendCredentialsAsync(user.Email, user.FullName, user.Email, newPassword, BuildLoginUrl(), ct);
+        }
+        catch (Exception ex)
+        {
+            throw new AppException(
+                $"Could not send the email, so the password was left unchanged. {ex.Message}", 502);
+        }
+
         var (hash, salt) = _passwordHasher.HashPassword(newPassword);
         await _users.UpdatePasswordAsync(userId, hash, salt, ct);
+    }
 
-        await _email.SendCredentialsAsync(user.Email, user.FullName, user.Email, newPassword, BuildLoginUrl(), ct);
+    public async Task<BulkOperationResultDto> ResendCredentialsBulkAsync(IReadOnlyList<int> userIds, CancellationToken ct = default)
+    {
+        var ids = userIds.Distinct().ToList();
+        var result = new BulkOperationResultDto { Total = ids.Count };
+        foreach (var id in ids)
+        {
+            try
+            {
+                await ResendCredentialsAsync(id, ct);
+                result.Succeeded++;
+            }
+            catch
+            {
+                result.Failed++;
+            }
+        }
+        return result;
     }
 
     private string BuildLoginUrl()
@@ -154,8 +201,10 @@ public sealed class UserService : IUserService
         FullName = u.FullName,
         RoleId = u.RoleId,
         RoleName = u.RoleName ?? string.Empty,
+        Phone = u.Phone,
         OfficeId = u.OfficeId,
         OfficeName = u.OfficeName,
+        Salary = u.Salary,
         IsActive = u.IsActive,
         CreatedOn = u.CreatedOn,
     };

@@ -63,6 +63,18 @@ public sealed class UsersController : BaseApiController
         return Ok(ApiResponse<IReadOnlyList<UserDto>>.Ok(users));
     }
 
+    /// <summary>Server-side paged list of users.</summary>
+    [Authorize(Roles = $"{RoleConstants.SuperAdmin},{RoleConstants.Admin}")]
+    [HttpGet("paged")]
+    public async Task<ActionResult<ApiResponse<PagedResultDto<UserDto>>>> GetPaged(
+        [FromQuery] int page = 1, [FromQuery] int pageSize = 10,
+        [FromQuery] string? role = null, [FromQuery] Guid? officeId = null, [FromQuery] bool noOffice = false,
+        CancellationToken ct = default)
+    {
+        var result = await _users.GetPagedAsync(page, pageSize, role, officeId, noOffice, ct);
+        return Ok(ApiResponse<PagedResultDto<UserDto>>.Ok(result));
+    }
+
     /// <summary>Only Admins / SuperAdmins can create users.</summary>
     [Authorize(Roles = $"{RoleConstants.SuperAdmin},{RoleConstants.Admin}")]
     [HttpPost]
@@ -102,5 +114,17 @@ public sealed class UsersController : BaseApiController
     {
         await _users.ResendCredentialsAsync(id, ct);
         return Ok(ApiResponse.Ok("New credentials have been emailed to the user."));
+    }
+
+    /// <summary>Resend credentials to many users at once (each gets a new temp password).</summary>
+    [Authorize(Roles = $"{RoleConstants.SuperAdmin},{RoleConstants.Admin}")]
+    [HttpPost("resend-credentials")]
+    public async Task<ActionResult<ApiResponse<BulkOperationResultDto>>> ResendCredentialsBulk(
+        [FromBody] BulkResendRequestDto request, CancellationToken ct)
+    {
+        var result = await _users.ResendCredentialsBulkAsync(request.UserIds, ct);
+        var message = $"Sent to {result.Succeeded} of {result.Total} user(s)"
+            + (result.Failed > 0 ? $"; {result.Failed} failed." : ".");
+        return Ok(ApiResponse<BulkOperationResultDto>.Ok(result, message));
     }
 }
