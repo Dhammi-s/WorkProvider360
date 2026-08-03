@@ -1,3 +1,11 @@
+/* =============================================================================
+   WorkProvider360 - Multi-tenant SaaS platform
+   Developed by : Jasmeet Singh  (Full Stack Software Engineer)
+   Date         : 2026-07-31
+   NOTE TO DEVELOPERS: Do NOT change functionality without full knowledge of the
+   SaaS architecture. PLEASE FIRST DISCUSS WITH SOFTWARE ENGINEER JASMEET SINGH.
+   ============================================================================= */
+
 using System.Data;
 using Dapper;
 using SaaS.Core.Entities;
@@ -79,6 +87,15 @@ public sealed class UserRepository : IUserRepository
         await db.ExecuteAsync(
             new CommandDefinition("usp_User_UpdatePassword",
                 new { UserId = userId, PasswordHash = passwordHash, PasswordSalt = passwordSalt },
+                commandType: CommandType.StoredProcedure, cancellationToken: ct));
+    }
+
+    public async Task UpdateAvatarAsync(int userId, string avatarUrl, CancellationToken ct = default)
+    {
+        using var db = await _connectionFactory.CreateTenantConnectionAsync(ct);
+        await db.ExecuteAsync(
+            new CommandDefinition("usp_User_UpdateAvatar",
+                new { UserId = userId, AvatarUrl = avatarUrl },
                 commandType: CommandType.StoredProcedure, cancellationToken: ct));
     }
 
