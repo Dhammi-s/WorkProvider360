@@ -1,3 +1,11 @@
+/* =============================================================================
+   WorkProvider360 - Multi-tenant SaaS platform
+   Developed by : Jasmeet Singh  (Full Stack Software Engineer)
+   Date         : 2026-07-31
+   NOTE TO DEVELOPERS: Do NOT change functionality without full knowledge of the
+   SaaS architecture. PLEASE FIRST DISCUSS WITH SOFTWARE ENGINEER JASMEET SINGH.
+   ============================================================================= */
+
 using SaaS.Core.Dtos.Inbound;
 using SaaS.Core.Dtos.Outbound;
 
@@ -8,6 +16,7 @@ public interface IUserService
     Task<IReadOnlyList<UserDto>> GetAllAsync(CancellationToken ct = default);
     Task<PagedResultDto<UserDto>> GetPagedAsync(int page, int pageSize, string? roleName, Guid? officeId, bool noOffice, CancellationToken ct = default);
     Task<UserDto?> GetByIdAsync(int userId, CancellationToken ct = default);
+    Task<UserDto> UpdateAvatarAsync(int userId, string imageBase64, CancellationToken ct = default);
     Task<UserDto> CreateAsync(CreateUserRequestDto request, CancellationToken ct = default);
 
     /// <summary>Public self-registration: creates an active account with the "User" role.</summary>

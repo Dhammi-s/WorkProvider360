@@ -1,3 +1,11 @@
+/* =============================================================================
+   WorkProvider360 - Multi-tenant SaaS platform
+   Developed by : Jasmeet Singh  (Full Stack Software Engineer)
+   Date         : 2026-07-31
+   NOTE TO DEVELOPERS: Do NOT change functionality without full knowledge of the
+   SaaS architecture. PLEASE FIRST DISCUSS WITH SOFTWARE ENGINEER JASMEET SINGH.
+   ============================================================================= */
+
 namespace SaaS.Core.Dtos.Outbound;
 
 /// <summary>
@@ -11,6 +19,7 @@ public sealed class UserDto
     public int RoleId { get; set; }
     public string RoleName { get; set; } = string.Empty;
     public string? Phone { get; set; }
+    public string? AvatarUrl { get; set; }
     public Guid? OfficeId { get; set; }
     public string? OfficeName { get; set; }
     public decimal? Salary { get; set; }

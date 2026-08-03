@@ -1,3 +1,11 @@
+/* =============================================================================
+   WorkProvider360 - Multi-tenant SaaS platform
+   Developed by : Jasmeet Singh  (Full Stack Software Engineer)
+   Date         : 2026-07-31
+   NOTE TO DEVELOPERS: Do NOT change functionality without full knowledge of the
+   SaaS architecture. PLEASE FIRST DISCUSS WITH SOFTWARE ENGINEER JASMEET SINGH.
+   ============================================================================= */
+
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using SaaS.BLL.Payments;
@@ -20,11 +28,16 @@ public static class DependencyInjection
         services.Configure<SmtpSettings>(configuration.GetSection(SmtpSettings.SectionName));
         services.Configure<StripeSettings>(configuration.GetSection(StripeSettings.SectionName));
         services.Configure<TwilioSettings>(configuration.GetSection(TwilioSettings.SectionName));
+        services.Configure<CloudinarySettings>(configuration.GetSection(CloudinarySettings.SectionName));
+        services.Configure<LlmSettings>(configuration.GetSection(LlmSettings.SectionName));
 
         services.AddSingleton<IPasswordHasher, Sha512PasswordHasher>();
         services.AddSingleton<IJwtTokenService, JwtTokenService>();
         services.AddScoped<IEmailService, EmailService>();
         services.AddScoped<ISmsService, SmsService>();
+        services.AddScoped<ICloudinaryService, CloudinaryService>();
+        services.AddScoped<IChatbotService, ChatbotService>();
+        services.AddScoped<INotificationService, NotificationService>();
         services.AddScoped<ISecurityAuditService, SecurityAuditService>();
         services.AddScoped<IAuthService, AuthService>();
         services.AddScoped<IUserService, UserService>();
@@ -34,6 +47,7 @@ public static class DependencyInjection
         services.AddScoped<IOfficeService, OfficeService>();
         services.AddScoped<ILogService, LogService>();
         services.AddScoped<IBrandingService, BrandingService>();
+        services.AddScoped<ILoginContentService, LoginContentService>();
         services.AddScoped<IAnnouncementService, AnnouncementService>();
         services.AddScoped<IInvoiceService, InvoiceService>();
         services.AddSingleton<IPaymentProvider, MockPaymentProvider>();
