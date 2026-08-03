@@ -37,6 +37,7 @@ public static class DependencyInjection
         services.AddScoped<ISmsService, SmsService>();
         services.AddScoped<ICloudinaryService, CloudinaryService>();
         services.AddScoped<IChatbotService, ChatbotService>();
+        services.AddScoped<INotificationService, NotificationService>();
         services.AddScoped<ISecurityAuditService, SecurityAuditService>();
         services.AddScoped<IAuthService, AuthService>();
         services.AddScoped<IUserService, UserService>();
