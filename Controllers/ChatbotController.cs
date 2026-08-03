@@ -14,7 +14,10 @@ using SaaS.Core.Interfaces.Services;
 
 namespace WebApplication1.Controllers;
 
-/// <summary>In-app assistant. Answers questions about WorkProvider360 for signed-in users.</summary>
+/// <summary>
+/// In-app assistant. Answers questions about WorkProvider360 for the signed-in
+/// user and keeps a per-user chat history in the tenant database.
+/// </summary>
 [Authorize]
 public sealed class ChatbotController : BaseApiController
 {
@@ -26,7 +29,23 @@ public sealed class ChatbotController : BaseApiController
     public async Task<ActionResult<ApiResponse<ChatReplyDto>>> Ask(
         [FromBody] ChatRequestDto request, CancellationToken ct)
     {
-        var reply = await _chatbot.AskAsync(request, ct);
+        var reply = await _chatbot.AskAsync(CurrentUserId, request, ct);
         return Ok(ApiResponse<ChatReplyDto>.Ok(reply));
+    }
+
+    /// <summary>The current user's saved chat history (oldest first).</summary>
+    [HttpGet("history")]
+    public async Task<ActionResult<ApiResponse<IReadOnlyList<ChatMessageDto>>>> History(CancellationToken ct)
+    {
+        var history = await _chatbot.GetHistoryAsync(CurrentUserId, ct);
+        return Ok(ApiResponse<IReadOnlyList<ChatMessageDto>>.Ok(history));
+    }
+
+    /// <summary>Clear the current user's chat history.</summary>
+    [HttpDelete("history")]
+    public async Task<ActionResult<ApiResponse<object?>>> ClearHistory(CancellationToken ct)
+    {
+        await _chatbot.ClearHistoryAsync(CurrentUserId, ct);
+        return Ok(ApiResponse.Ok("Chat history cleared."));
     }
 }

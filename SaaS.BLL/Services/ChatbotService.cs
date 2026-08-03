@@ -15,6 +15,7 @@ using Microsoft.Extensions.Options;
 using SaaS.Core.Dtos.Inbound;
 using SaaS.Core.Dtos.Outbound;
 using SaaS.Core.Exceptions;
+using SaaS.Core.Interfaces.Repositories;
 using SaaS.Core.Interfaces.Services;
 using SaaS.Core.Settings;
 
@@ -31,15 +32,17 @@ public sealed class ChatbotService : IChatbotService
     private static readonly HttpClient _http = new();
 
     private readonly LlmSettings _settings;
+    private readonly IChatMessageRepository _messages;
     private readonly ILogger<ChatbotService> _logger;
 
-    public ChatbotService(IOptions<LlmSettings> options, ILogger<ChatbotService> logger)
+    public ChatbotService(IOptions<LlmSettings> options, IChatMessageRepository messages, ILogger<ChatbotService> logger)
     {
         _settings = options.Value;
+        _messages = messages;
         _logger = logger;
     }
 
-    public async Task<ChatReplyDto> AskAsync(ChatRequestDto request, CancellationToken ct = default)
+    public async Task<ChatReplyDto> AskAsync(int userId, ChatRequestDto request, CancellationToken ct = default)
     {
         if (!_settings.IsConfigured)
             throw new AppException("The assistant is not configured. Set the LLM API key (Llm__ApiKey).", 503);
@@ -51,11 +54,14 @@ public sealed class ChatbotService : IChatbotService
         var context = BuildContext(question);
 
         var messages = new List<object> { new { role = "system", content = SystemPrompt(context) } };
-        foreach (var turn in request.History.TakeLast(6))
+
+        // Long-term memory: the user's recent prior turns from the tenant database.
+        var prior = await _messages.GetByUserAsync(userId, 12, ct);
+        foreach (var m in prior)
         {
-            var role = string.Equals(turn.Role, "assistant", StringComparison.OrdinalIgnoreCase) ? "assistant" : "user";
-            if (!string.IsNullOrWhiteSpace(turn.Content))
-                messages.Add(new { role, content = turn.Content });
+            var role = string.Equals(m.Role, "assistant", StringComparison.OrdinalIgnoreCase) ? "assistant" : "user";
+            if (!string.IsNullOrWhiteSpace(m.Content))
+                messages.Add(new { role, content = m.Content });
         }
         messages.Add(new { role = "user", content = question });
 
@@ -92,8 +98,35 @@ public sealed class ChatbotService : IChatbotService
         var answer = ReadAnswer(body);
         if (string.IsNullOrWhiteSpace(answer))
             answer = "Sorry, I couldn’t generate a response. Please try rephrasing your question.";
-        return new ChatReplyDto { Answer = answer.Trim() };
+        answer = answer.Trim();
+
+        // Persist this turn so the user sees their history next time (best-effort).
+        try
+        {
+            await _messages.AddAsync(userId, "user", question, ct);
+            await _messages.AddAsync(userId, "assistant", answer, ct);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Failed to persist chat history for user {UserId}.", userId);
+        }
+
+        return new ChatReplyDto { Answer = answer };
     }
+
+    public async Task<IReadOnlyList<ChatMessageDto>> GetHistoryAsync(int userId, CancellationToken ct = default)
+    {
+        var rows = await _messages.GetByUserAsync(userId, 200, ct);
+        return rows.Select(m => new ChatMessageDto
+        {
+            Role = m.Role,
+            Content = m.Content,
+            CreatedOn = m.CreatedOn,
+        }).ToList();
+    }
+
+    public Task ClearHistoryAsync(int userId, CancellationToken ct = default)
+        => _messages.ClearByUserAsync(userId, ct);
 
     private static string SystemPrompt(string context) =>
         "You are the WorkProvider360 in-app assistant. WorkProvider360 is a multi-tenant SaaS platform for " +

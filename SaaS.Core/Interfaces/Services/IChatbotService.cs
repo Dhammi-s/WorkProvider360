@@ -11,8 +11,13 @@ using SaaS.Core.Dtos.Outbound;
 
 namespace SaaS.Core.Interfaces.Services;
 
-/// <summary>Retrieval-augmented assistant that answers questions about WorkProvider360.</summary>
+/// <summary>
+/// Retrieval-augmented assistant that answers questions about WorkProvider360,
+/// with per-user long-term chat memory persisted in the tenant database.
+/// </summary>
 public interface IChatbotService
 {
-    Task<ChatReplyDto> AskAsync(ChatRequestDto request, CancellationToken ct = default);
+    Task<ChatReplyDto> AskAsync(int userId, ChatRequestDto request, CancellationToken ct = default);
+    Task<IReadOnlyList<ChatMessageDto>> GetHistoryAsync(int userId, CancellationToken ct = default);
+    Task ClearHistoryAsync(int userId, CancellationToken ct = default);
 }
