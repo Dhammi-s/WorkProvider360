@@ -1,3 +1,11 @@
+/* =============================================================================
+   WorkProvider360 - Multi-tenant SaaS platform
+   Developed by : Jasmeet Singh  (Full Stack Software Engineer)
+   Date         : 2026-07-31
+   NOTE TO DEVELOPERS: Do NOT change functionality without full knowledge of the
+   SaaS architecture. PLEASE FIRST DISCUSS WITH SOFTWARE ENGINEER JASMEET SINGH.
+   ============================================================================= */
+
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using SaaS.Core.Constants;
@@ -52,6 +60,15 @@ public sealed class UsersController : BaseApiController
         return user is null
             ? NotFound(ApiResponse.Fail("User not found."))
             : Ok(ApiResponse<UserDto>.Ok(user));
+    }
+
+    /// <summary>Any authenticated user can set their own profile photo (uploaded to Cloudinary).</summary>
+    [HttpPost("me/avatar")]
+    public async Task<ActionResult<ApiResponse<UserDto>>> UpdateAvatar(
+        [FromBody] UpdateAvatarRequestDto request, CancellationToken ct)
+    {
+        var updated = await _users.UpdateAvatarAsync(CurrentUserId, request.ImageBase64, ct);
+        return Ok(ApiResponse<UserDto>.Ok(updated, "Profile photo updated."));
     }
 
     /// <summary>Only Admins / SuperAdmins can list all users in the tenant.</summary>
