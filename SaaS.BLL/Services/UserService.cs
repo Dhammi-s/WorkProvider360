@@ -13,9 +13,11 @@ using SaaS.Core.Dtos.Inbound;
 using SaaS.Core.Dtos.Outbound;
 using SaaS.Core.Entities;
 using SaaS.Core.Exceptions;
+using SaaS.Core.Interfaces.Infrastructure;
 using SaaS.Core.Interfaces.Repositories;
 using SaaS.Core.Interfaces.Services;
 using SaaS.Core.Settings;
+using SaaS.BLL.Common;
 
 namespace SaaS.BLL.Services;
 
@@ -27,6 +29,7 @@ public sealed class UserService : IUserService
     private readonly IEmailService _email;
     private readonly ICloudinaryService _cloudinary;
     private readonly IApplicationSettingsRepository _appSettings;
+    private readonly ITenantContext _tenant;
     private readonly SmtpSettings _smtp;
 
     public UserService(
@@ -36,6 +39,7 @@ public sealed class UserService : IUserService
         IEmailService email,
         ICloudinaryService cloudinary,
         IApplicationSettingsRepository appSettings,
+        ITenantContext tenant,
         IOptions<SmtpSettings> smtp)
     {
         _users = users;
@@ -44,6 +48,7 @@ public sealed class UserService : IUserService
         _email = email;
         _cloudinary = cloudinary;
         _appSettings = appSettings;
+        _tenant = tenant;
         _smtp = smtp.Value;
     }
 
@@ -265,11 +270,9 @@ public sealed class UserService : IUserService
 
     private string BuildLoginUrl()
     {
-        var baseUrl = (_smtp.ResetPasswordBaseUrl ?? string.Empty).Trim();
-        const string resetSuffix = "/reset-password";
-        if (baseUrl.EndsWith(resetSuffix, StringComparison.OrdinalIgnoreCase))
-            baseUrl = baseUrl[..^resetSuffix.Length];
-        baseUrl = baseUrl.TrimEnd('/');
+        // Prefer the resolved agency's own domain so each tenant's emails link to
+        // their own front-end; fall back to the configured base URL.
+        var baseUrl = FrontendUrls.ResolveOrigin(_tenant.Agency?.DomainUrl, _smtp.ResetPasswordBaseUrl);
         return string.IsNullOrEmpty(baseUrl) ? "/login" : $"{baseUrl}/login";
     }
 

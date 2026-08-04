@@ -18,6 +18,7 @@ using SaaS.Core.Interfaces.Infrastructure;
 using SaaS.Core.Interfaces.Repositories;
 using SaaS.Core.Interfaces.Services;
 using SaaS.Core.Settings;
+using SaaS.BLL.Common;
 
 namespace SaaS.BLL.Services;
 
@@ -205,8 +206,8 @@ public sealed class AuthService : IAuthService
 
     private string BuildResetLink(string email, string token)
     {
-        var baseUrl = _smtpSettings.ResetPasswordBaseUrl.TrimEnd('/');
+        var baseUrl = FrontendUrls.ResolveOrigin(_tenant.Agency?.DomainUrl, _smtpSettings.ResetPasswordBaseUrl);
         var query = $"email={WebUtility.UrlEncode(email)}&token={WebUtility.UrlEncode(token)}";
-        return $"{baseUrl}?{query}";
+        return $"{baseUrl}/reset-password?{query}";
     }
 }
