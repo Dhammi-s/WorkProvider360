@@ -22,5 +22,14 @@ public interface IUserRepository
     Task<int> CreateAsync(AppUser user, CancellationToken ct = default);
     Task UpdatePasswordAsync(int userId, string passwordHash, string passwordSalt, CancellationToken ct = default);
     Task UpdateAvatarAsync(int userId, string avatarUrl, CancellationToken ct = default);
+
+    /// <summary>Records a failed sign-in; locks the account once the threshold is reached (SuperAdmin exempt).</summary>
+    Task RegisterFailedLoginAsync(int userId, int threshold, CancellationToken ct = default);
+
+    /// <summary>Clears the failed-attempt counter after a successful sign-in.</summary>
+    Task ResetFailedLoginAsync(int userId, CancellationToken ct = default);
+
+    /// <summary>Manually locks or unlocks a user; unlocking also clears the failed-attempt counter.</summary>
+    Task SetLockoutAsync(int userId, bool isLockedOut, CancellationToken ct = default);
     Task<bool> EmailExistsAsync(string email, CancellationToken ct = default);
 }

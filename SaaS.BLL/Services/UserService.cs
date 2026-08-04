@@ -26,6 +26,7 @@ public sealed class UserService : IUserService
     private readonly IPasswordHasher _passwordHasher;
     private readonly IEmailService _email;
     private readonly ICloudinaryService _cloudinary;
+    private readonly IApplicationSettingsRepository _appSettings;
     private readonly SmtpSettings _smtp;
 
     public UserService(
@@ -34,6 +35,7 @@ public sealed class UserService : IUserService
         IPasswordHasher passwordHasher,
         IEmailService email,
         ICloudinaryService cloudinary,
+        IApplicationSettingsRepository appSettings,
         IOptions<SmtpSettings> smtp)
     {
         _users = users;
@@ -41,7 +43,43 @@ public sealed class UserService : IUserService
         _passwordHasher = passwordHasher;
         _email = email;
         _cloudinary = cloudinary;
+        _appSettings = appSettings;
         _smtp = smtp.Value;
+    }
+
+    /// <summary>
+    /// Whether the current tenant lets Admins and Managers (not only SuperAdmin)
+    /// unlock locked accounts. Surfaced to the Team page to decide button visibility.
+    /// </summary>
+    public async Task<bool> GetAllowStaffUnlockAsync(CancellationToken ct = default)
+    {
+        var settings = await _appSettings.GetAsync(ct);
+        return settings?.AllowStaffUnlock ?? false;
+    }
+
+    /// <summary>
+    /// Unlocks a locked account. SuperAdmin may unlock anyone. Admin / Manager may
+    /// unlock only when the tenant flag allows it AND the target is strictly lower
+    /// in rank than the actor (Admin &gt; Manager &gt; User).
+    /// </summary>
+    public async Task UnlockAsync(int actingRoleId, int targetUserId, CancellationToken ct = default)
+    {
+        var target = await _users.GetByIdAsync(targetUserId, ct)
+            ?? throw AppException.NotFound("User not found.");
+
+        if (actingRoleId != RoleConstants.SuperAdminId)
+        {
+            // Admin / Manager gate: tenant flag must be on...
+            if (!await GetAllowStaffUnlockAsync(ct))
+                throw AppException.Forbidden("Unlocking accounts is restricted to SuperAdmins for this agency.");
+
+            // ...and they can only unlock someone below their own rank.
+            // Lower RoleId = higher rank, so the target's id must be greater.
+            if (target.RoleId <= actingRoleId)
+                throw AppException.Forbidden("You can only unlock accounts below your own role.");
+        }
+
+        await _users.SetLockoutAsync(targetUserId, false, ct);
     }
 
     /// <summary>Uploads a cropped avatar to Cloudinary and stores its URL on the user.</summary>
@@ -234,6 +272,7 @@ public sealed class UserService : IUserService
         OfficeName = u.OfficeName,
         Salary = u.Salary,
         IsActive = u.IsActive,
+        IsLockedOut = u.IsLockedOut,
         CreatedOn = u.CreatedOn,
     };
 }

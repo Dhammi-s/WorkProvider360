@@ -31,6 +31,12 @@ public interface IUserService
     /// <summary>Resend credentials to many users; returns per-batch success/failure counts.</summary>
     Task<BulkOperationResultDto> ResendCredentialsBulkAsync(IReadOnlyList<int> userIds, CancellationToken ct = default);
 
+    /// <summary>Whether Admins/Managers (not only SuperAdmin) may unlock accounts in this tenant.</summary>
+    Task<bool> GetAllowStaffUnlockAsync(CancellationToken ct = default);
+
+    /// <summary>Unlocks a locked account, enforcing role/flag rules. SuperAdmin always allowed.</summary>
+    Task UnlockAsync(int actingRoleId, int targetUserId, CancellationToken ct = default);
+
     /// <summary>
     /// Creates the first SuperAdmin for the current tenant. Fails if the tenant
     /// already has any user (so the endpoint self-disables after first use).

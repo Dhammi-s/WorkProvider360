@@ -58,18 +58,35 @@ public sealed class AuthService : IAuthService
         _logger = logger;
     }
 
+    /// <summary>Failed sign-in attempts allowed before an account (except SuperAdmin) is locked.</summary>
+    private const int MaxFailedAttempts = 3;
+
     public async Task<AuthResponseDto> LoginAsync(LoginRequestDto request, CancellationToken ct = default)
     {
         var user = await _users.GetByEmailAsync(request.Email, ct);
 
-        // Same generic error whether the user is missing, inactive or the
-        // password is wrong — avoids leaking which emails are registered.
-        if (user is null || !user.IsActive ||
-            !_passwordHasher.Verify(request.Password, user.PasswordHash, user.PasswordSalt))
+        // Same generic error whether the user is missing or inactive — avoids
+        // leaking which emails are registered.
+        if (user is null || !user.IsActive)
+            throw AppException.Unauthorized("Invalid email or password.");
+
+        // A locked account cannot sign in until an administrator unlocks it. We
+        // tell the user plainly so they know to ask for an unlock (423 Locked).
+        if (user.IsLockedOut)
+            throw new AppException(
+                "Your account is locked after too many failed sign-in attempts. Please ask a SuperAdmin, Admin or Manager to unlock it.",
+                423);
+
+        if (!_passwordHasher.Verify(request.Password, user.PasswordHash, user.PasswordSalt))
         {
+            // Count the miss; this locks the account once the threshold is hit
+            // (SuperAdmin is exempt — enforced in the stored procedure).
+            await _users.RegisterFailedLoginAsync(user.UserId, MaxFailedAttempts, ct);
             throw AppException.Unauthorized("Invalid email or password.");
         }
 
+        // Successful sign-in clears any accumulated failures.
+        await _users.ResetFailedLoginAsync(user.UserId, ct);
         return await IssueTokensAsync(user, ct);
     }
 
