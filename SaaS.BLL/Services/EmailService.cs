@@ -159,6 +159,50 @@ public sealed class EmailService : IEmailService
         return SendAsync(toAddress, "Your application was approved", body, ct);
     }
 
+    public Task SendAccountUnlockedAsync(string toAddress, string fullName, string email, string unlockedBy, string temporaryPassword, string loginUrl, CancellationToken ct = default)
+    {
+        var body = $"""
+            <div style="margin:0;padding:0;background:#f1f5f9;">
+              <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#f1f5f9;padding:24px 0;font-family:Segoe UI,Roboto,Helvetica,Arial,sans-serif;">
+                <tr><td align="center">
+                  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:520px;background:#ffffff;border-radius:14px;overflow:hidden;border:1px solid #e2e8f0;">
+                    <tr>
+                      <td style="background:#0f766e;padding:28px 32px;">
+                        <div style="display:inline-block;width:40px;height:40px;border-radius:10px;background:rgba(255,255,255,0.14);text-align:center;line-height:40px;font-size:20px;">🔓</div>
+                        <div style="color:#ffffff;font-size:18px;font-weight:700;margin-top:14px;">Your account has been unlocked</div>
+                      </td>
+                    </tr>
+                    <tr>
+                      <td style="padding:28px 32px;color:#334155;font-size:14px;line-height:1.6;">
+                        <p style="margin:0 0 14px;">Hi {WebUtility.HtmlEncode(fullName)},</p>
+                        <p style="margin:0 0 14px;">Good news — your account was locked after several failed sign-in attempts and has now been
+                          <strong style="color:#0f766e;">unlocked by {WebUtility.HtmlEncode(unlockedBy)}</strong>. You can sign in again with the temporary password below.</p>
+                        <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:18px 0;background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;">
+                          <tr><td style="padding:16px 18px;">
+                            <div style="font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:#94a3b8;">Email</div>
+                            <div style="font-size:14px;font-weight:600;color:#0f172a;margin:2px 0 12px;">{WebUtility.HtmlEncode(email)}</div>
+                            <div style="font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:#94a3b8;">Temporary password</div>
+                            <div style="font-size:16px;font-weight:700;color:#0f172a;font-family:Consolas,Menlo,monospace;margin-top:2px;">{WebUtility.HtmlEncode(temporaryPassword)}</div>
+                          </td></tr>
+                        </table>
+                        <a href="{loginUrl}" style="display:inline-block;background:#0f766e;color:#ffffff;text-decoration:none;font-weight:600;font-size:14px;padding:12px 22px;border-radius:10px;">Sign in now</a>
+                        <p style="margin:18px 0 0;color:#64748b;font-size:13px;">For your security, please change this password from your profile right after signing in.</p>
+                      </td>
+                    </tr>
+                    <tr>
+                      <td style="padding:16px 32px;background:#f8fafc;border-top:1px solid #e2e8f0;color:#94a3b8;font-size:12px;">
+                        If you didn't expect this, please contact your administrator.
+                      </td>
+                    </tr>
+                  </table>
+                </td></tr>
+              </table>
+            </div>
+            """;
+
+        return SendAsync(toAddress, "Your account has been unlocked", body, ct);
+    }
+
     public Task SendApplicationRejectedAsync(string toAddress, string fullName, string roleName, string reason, CancellationToken ct = default)
     {
         var body = $"""

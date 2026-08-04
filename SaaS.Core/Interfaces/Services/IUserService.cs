@@ -34,8 +34,8 @@ public interface IUserService
     /// <summary>Whether Admins/Managers (not only SuperAdmin) may unlock accounts in this tenant.</summary>
     Task<bool> GetAllowStaffUnlockAsync(CancellationToken ct = default);
 
-    /// <summary>Unlocks a locked account, enforcing role/flag rules. SuperAdmin always allowed.</summary>
-    Task UnlockAsync(int actingRoleId, int targetUserId, CancellationToken ct = default);
+    /// <summary>Unlocks a locked account (resets + emails a temp password), enforcing role/flag rules.</summary>
+    Task UnlockAsync(int actingUserId, int actingRoleId, int targetUserId, CancellationToken ct = default);
 
     /// <summary>
     /// Creates the first SuperAdmin for the current tenant. Fails if the tenant

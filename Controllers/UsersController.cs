@@ -165,7 +165,7 @@ public sealed class UsersController : BaseApiController
     [HttpPost("{id:int}/unlock")]
     public async Task<ActionResult<ApiResponse<object?>>> Unlock(int id, CancellationToken ct)
     {
-        await _users.UnlockAsync(CurrentRoleId, id, ct);
-        return Ok(ApiResponse.Ok("Account unlocked."));
+        await _users.UnlockAsync(CurrentUserId, CurrentRoleId, id, ct);
+        return Ok(ApiResponse.Ok("Account unlocked — a new temporary password has been emailed to the user."));
     }
 }

@@ -58,11 +58,12 @@ public sealed class UserService : IUserService
     }
 
     /// <summary>
-    /// Unlocks a locked account. SuperAdmin may unlock anyone. Admin / Manager may
-    /// unlock only when the tenant flag allows it AND the target is strictly lower
-    /// in rank than the actor (Admin &gt; Manager &gt; User).
+    /// Unlocks a locked account: resets the password to a fresh temporary one and
+    /// emails the user (naming who unlocked them) before clearing the lock.
+    /// SuperAdmin may unlock anyone. Admin / Manager may unlock only when the tenant
+    /// flag allows it AND the target is strictly lower in rank than the actor.
     /// </summary>
-    public async Task UnlockAsync(int actingRoleId, int targetUserId, CancellationToken ct = default)
+    public async Task UnlockAsync(int actingUserId, int actingRoleId, int targetUserId, CancellationToken ct = default)
     {
         var target = await _users.GetByIdAsync(targetUserId, ct)
             ?? throw AppException.NotFound("User not found.");
@@ -79,6 +80,28 @@ public sealed class UserService : IUserService
                 throw AppException.Forbidden("You can only unlock accounts below your own role.");
         }
 
+        // Who is unlocking — shown in the email, e.g. "Alex Morgan (Admin)".
+        var actor = await _users.GetByIdAsync(actingUserId, ct);
+        var unlockedBy = actor is null
+            ? "an administrator"
+            : $"{actor.FullName} ({actor.RoleName})";
+
+        var newPassword = GenerateTemporaryPassword();
+
+        // Email the new password BEFORE changing anything: if delivery fails we
+        // leave the account locked and the old password intact, and surface why.
+        try
+        {
+            await _email.SendAccountUnlockedAsync(target.Email, target.FullName, target.Email, unlockedBy, newPassword, BuildLoginUrl(), ct);
+        }
+        catch (Exception ex)
+        {
+            throw new AppException(
+                $"Could not send the unlock email, so the account was left locked. {ex.Message}", 502);
+        }
+
+        var (hash, salt) = _passwordHasher.HashPassword(newPassword);
+        await _users.UpdatePasswordAsync(targetUserId, hash, salt, ct);
         await _users.SetLockoutAsync(targetUserId, false, ct);
     }
 
