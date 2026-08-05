@@ -99,6 +99,32 @@ public sealed class UserRepository : IUserRepository
                 commandType: CommandType.StoredProcedure, cancellationToken: ct));
     }
 
+    public async Task RegisterFailedLoginAsync(int userId, int threshold, CancellationToken ct = default)
+    {
+        using var db = await _connectionFactory.CreateTenantConnectionAsync(ct);
+        await db.ExecuteAsync(
+            new CommandDefinition("usp_User_RegisterFailedLogin",
+                new { UserId = userId, Threshold = threshold },
+                commandType: CommandType.StoredProcedure, cancellationToken: ct));
+    }
+
+    public async Task ResetFailedLoginAsync(int userId, CancellationToken ct = default)
+    {
+        using var db = await _connectionFactory.CreateTenantConnectionAsync(ct);
+        await db.ExecuteAsync(
+            new CommandDefinition("usp_User_ResetFailedLogin", new { UserId = userId },
+                commandType: CommandType.StoredProcedure, cancellationToken: ct));
+    }
+
+    public async Task SetLockoutAsync(int userId, bool isLockedOut, CancellationToken ct = default)
+    {
+        using var db = await _connectionFactory.CreateTenantConnectionAsync(ct);
+        await db.ExecuteAsync(
+            new CommandDefinition("usp_User_SetLockout",
+                new { UserId = userId, IsLockedOut = isLockedOut },
+                commandType: CommandType.StoredProcedure, cancellationToken: ct));
+    }
+
     public async Task<bool> EmailExistsAsync(string email, CancellationToken ct = default)
     {
         using var db = await _connectionFactory.CreateTenantConnectionAsync(ct);

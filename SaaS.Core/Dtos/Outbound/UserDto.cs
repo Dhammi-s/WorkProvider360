@@ -24,5 +24,6 @@ public sealed class UserDto
     public string? OfficeName { get; set; }
     public decimal? Salary { get; set; }
     public bool IsActive { get; set; }
+    public bool IsLockedOut { get; set; }
     public DateTime CreatedOn { get; set; }
 }

@@ -23,6 +23,9 @@ public interface IEmailService
     /// <summary>Sends login credentials to an approved applicant.</summary>
     Task SendCredentialsAsync(string toAddress, string fullName, string email, string temporaryPassword, string loginUrl, CancellationToken ct = default);
 
+    /// <summary>Notifies a user that their locked account was unlocked, with a fresh temporary password.</summary>
+    Task SendAccountUnlockedAsync(string toAddress, string fullName, string email, string unlockedBy, string temporaryPassword, string loginUrl, CancellationToken ct = default);
+
     /// <summary>Notifies an applicant that their application was rejected.</summary>
     Task SendApplicationRejectedAsync(string toAddress, string fullName, string roleName, string reason, CancellationToken ct = default);
 

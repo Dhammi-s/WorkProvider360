@@ -19,5 +19,8 @@ public sealed class ApplicationSettings
     public bool RequireAddress { get; set; }
     public bool EmailNotificationsEnabled { get; set; }
     public string? NotificationEmail { get; set; }
+
+    /// <summary>When true, Admins and Managers (not just SuperAdmin) may unlock locked accounts.</summary>
+    public bool AllowStaffUnlock { get; set; }
     public DateTime UpdatedOn { get; set; }
 }
