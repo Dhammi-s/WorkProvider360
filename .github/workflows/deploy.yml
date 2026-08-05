@@ -1,14 +1,3 @@
-# Full GitHub Actions workflow: build an ASP.NET app and deploy it to MonsterASP.NET via WebDeploy.
-#
-# Put this in your TARGET repo at .github/workflows/deploy.yml — on EVERY branch you deploy
-# (GitHub reads the workflow_dispatch trigger from the branch you dispatch).
-#
-# Secrets (repo → Settings → Secrets and variables → Actions), from the panel's "WebDeploy access" tab:
-#   WEBDEPLOY_URL       https://site80671.siteasp.net:8172/msdeploy.axd?site=site80671
-#   WEBDEPLOY_SITE      site80671
-#   WEBDEPLOY_USERNAME  site80671
-#   WEBDEPLOY_PASSWORD  (click "Show" on that tab and copy the exact password)
-
 name: Deploy
 
 on:
@@ -29,7 +18,6 @@ jobs:
           dotnet-version: '10.0.x'
 
       - name: Publish
-        # Adjust the path if the web project's .csproj isn't at the repo root.
         run: dotnet publish WorkProvider360.csproj -c Release -o publish
 
       - name: Deploy with WebDeploy (app-offline releases locked DLLs)
@@ -41,7 +29,7 @@ jobs:
           WD_PASS: ${{ secrets.WEBDEPLOY_PASSWORD }}
         run: |
           $msdeploy = "C:\Program Files\IIS\Microsoft Web Deploy V3\msdeploy.exe"
-          $src  = "-source:contentPath=`"$env:GITHUB_WORKSPACE\publish`""
-          $dest = "-dest:contentPath=`"$env:WD_SITE`",computerName=`"$env:WD_URL`",userName=`"$env:WD_USER`",password=`"$env:WD_PASS`",authtype=`"Basic`""
-          & $msdeploy "-verb:sync" $src $dest "-allowUntrusted=true" "-enableRule:AppOffline"
+          $src  = "-source:contentPath=$env:GITHUB_WORKSPACE\publish"
+          $dest = "-dest:contentPath=$env:WD_SITE,computerName=$env:WD_URL,userName=$env:WD_USER,password=$env:WD_PASS,authtype=Basic"
+          & $msdeploy -verb:sync $src $dest -allowUntrusted=true -enableRule:AppOffline
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
