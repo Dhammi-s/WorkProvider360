@@ -1,31 +1,33 @@
-# Sample GitHub Actions workflow for the CI/CD portal (Option 3).
+# RECOMMENDED for a LIVE ASP.NET app on MonsterASP.NET — uses WebDeploy (MSDeploy).
+#
+# Why: FTP/SFTP can't overwrite a running app's DLLs (IIS locks them) and can't chmod
+# on shared hosting. WebDeploy takes the app offline, overwrites, and restarts — clean every time.
 #
 # HOW TO USE
-# 1. Copy this file into your TARGET repo (e.g. Dhammi-s/WorkProvider360) at:
-#        .github/workflows/deploy.yml
-# 2. In that repo → Settings → Secrets and variables → Actions, add:
-#        FTP_HOST      e.g. site80671.siteasp.net
-#        FTP_USERNAME  e.g. site80671
-#        FTP_PASSWORD  your FTP/SFTP password
-# 3. In the SQL Access portal, set the website's "Workflow file" to: deploy.yml
-# 4. Click Deploy — the portal dispatches this workflow, streams its steps,
-#    and records history. GitHub's runner does the build + upload (no shared-host
-#    limits, and GitHub's network is not firewall-blocked like your box was).
-#
-# The `workflow_dispatch` trigger is REQUIRED so the portal can start it via the API.
+# 1. Copy this into your target repo at: .github/workflows/deploy.yml
+#    (must be on EVERY branch you deploy — GitHub reads workflow_dispatch from that branch)
+# 2. Open your MonsterASP.NET panel → the "WebDeploy access" tab. It shows:
+#       Server / URL   (an https://…:8172/msdeploy.axd?site=… endpoint)
+#       Site name      (e.g. site80671)
+#       Username       (e.g. site80671)
+#       Password
+# 3. In the repo → Settings → Secrets and variables → Actions, add:
+#       WEBDEPLOY_URL       the msdeploy endpoint URL from the panel
+#       WEBDEPLOY_SITE      the site name
+#       WEBDEPLOY_USERNAME  the username
+#       WEBDEPLOY_PASSWORD  the password
+# 4. In the portal, set the website's "Workflow file" = deploy.yml, then Deploy.
 
 name: Deploy
 
-# IMPORTANT: this file (with workflow_dispatch) must exist on EVERY branch you deploy,
-# not just master — GitHub reads the trigger from the branch you dispatch.
 on:
-  workflow_dispatch:      # lets the portal trigger it
+  workflow_dispatch:
   push:
-    branches: [ master, Development-secrateissue ]  # optional: also deploy on push
+    branches: [ master, Development-secrateissue ]
 
 jobs:
-  build-and-deploy:
-    runs-on: ubuntu-latest
+  deploy:
+    runs-on: windows-latest        # msdeploy.exe ships on the Windows runner image
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -36,22 +38,15 @@ jobs:
           dotnet-version: '10.0.x'
 
       - name: Publish
-        # Point at your web project's .csproj (adjust the path if it isn't at the repo root).
         run: dotnet publish WorkProvider360.csproj -c Release -o publish
 
-      # SFTP is reliable for MonsterASP.NET; FTPS (port 21) gives "550 driver error".
-      - name: Deploy to MonsterASP.NET (SFTP)
-        uses: wlixcc/SFTP-Deploy-Action@v1.2.5
-        with:
-          server: ${{ secrets.FTP_HOST }}       # site80671.siteasp.net
-          port: 22
-          username: ${{ secrets.FTP_USERNAME }}
-          password: ${{ secrets.FTP_PASSWORD }}
-          local_path: './publish/*'
-          remote_path: '/wwwroot'
-          sftp_only: true
-
-# ── If you later hit "file in use / locked DLL" on updates (because the app is running),
-#    the robust fix for ASP.NET on MonsterASP.NET is WebDeploy (the "WebDeploy access" tab
-#    in your panel) — it takes the app offline, overwrites locked files, and brings it back.
-#    Ask and I'll provide a WebDeploy-based workflow.
+      - name: Deploy with WebDeploy (app-offline + overwrite locked files)
+        shell: pwsh
+        run: |
+          $msdeploy = "C:\Program Files\IIS\Microsoft Web Deploy V3\msdeploy.exe"
+          & $msdeploy `
+            -verb:sync `
+            -source:contentPath="${{ github.workspace }}\publish" `
+            -dest:contentPath="${{ secrets.WEBDEPLOY_SITE }}",computerName="${{ secrets.WEBDEPLOY_URL }}",userName="${{ secrets.WEBDEPLOY_USERNAME }}",password="${{ secrets.WEBDEPLOY_PASSWORD }}",authtype="Basic" `
+            -allowUntrusted=true `
+            -enableRule:AppOffline           # <-- releases the locked DLLs during deploy
