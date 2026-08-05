@@ -1,23 +1,3 @@
-# RECOMMENDED for a LIVE ASP.NET app on MonsterASP.NET — uses WebDeploy (MSDeploy).
-#
-# Why: FTP/SFTP can't overwrite a running app's DLLs (IIS locks them) and can't chmod
-# on shared hosting. WebDeploy takes the app offline, overwrites, and restarts — clean every time.
-#
-# HOW TO USE
-# 1. Copy this into your target repo at: .github/workflows/deploy.yml
-#    (must be on EVERY branch you deploy — GitHub reads workflow_dispatch from that branch)
-# 2. Open your MonsterASP.NET panel → the "WebDeploy access" tab. It shows:
-#       Server / URL   (an https://…:8172/msdeploy.axd?site=… endpoint)
-#       Site name      (e.g. site80671)
-#       Username       (e.g. site80671)
-#       Password
-# 3. In the repo → Settings → Secrets and variables → Actions, add:
-#       WEBDEPLOY_URL       the msdeploy endpoint URL from the panel
-#       WEBDEPLOY_SITE      the site name
-#       WEBDEPLOY_USERNAME  the username
-#       WEBDEPLOY_PASSWORD  the password
-# 4. In the portal, set the website's "Workflow file" = deploy.yml, then Deploy.
-
 name: Deploy
 
 on:
@@ -27,7 +7,7 @@ on:
 
 jobs:
   deploy:
-    runs-on: windows-latest        # msdeploy.exe ships on the Windows runner image
+    runs-on: windows-latest
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -40,13 +20,17 @@ jobs:
       - name: Publish
         run: dotnet publish WorkProvider360.csproj -c Release -o publish
 
-      - name: Deploy with WebDeploy (app-offline + overwrite locked files)
-        shell: pwsh
-        run: |
-          $msdeploy = "C:\Program Files\IIS\Microsoft Web Deploy V3\msdeploy.exe"
-          & $msdeploy `
-            -verb:sync `
-            -source:contentPath="${{ github.workspace }}\publish" `
-            -dest:contentPath="${{ secrets.WEBDEPLOY_SITE }}",computerName="${{ secrets.WEBDEPLOY_URL }}",userName="${{ secrets.WEBDEPLOY_USERNAME }}",password="${{ secrets.WEBDEPLOY_PASSWORD }}",authtype="Basic" `
-            -allowUntrusted=true `
-            -enableRule:AppOffline           # <-- releases the locked DLLs during deploy
+      - name: Deploy with WebDeploy
+        shell: cmd
+        env:
+          WD_SITE: ${{ secrets.WEBDEPLOY_SITE }}
+          WD_URL: ${{ secrets.WEBDEPLOY_URL }}
+          WD_USER: ${{ secrets.WEBDEPLOY_USERNAME }}
+          WD_PASS: ${{ secrets.WEBDEPLOY_PASSWORD }}
+        run: >
+          "C:\Program Files\IIS\Microsoft Web Deploy V3\msdeploy.exe"
+          -verb:sync
+          -source:contentPath="%GITHUB_WORKSPACE%\publish"
+          -dest:contentPath="%WD_SITE%",computerName="%WD_URL%",userName="%WD_USER%",password="%WD_PASS%",authtype="Basic"
+          -allowUntrusted=true
+          -enableRule:AppOffline
