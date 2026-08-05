@@ -13,9 +13,11 @@ using SaaS.Core.Dtos.Inbound;
 using SaaS.Core.Dtos.Outbound;
 using SaaS.Core.Entities;
 using SaaS.Core.Exceptions;
+using SaaS.Core.Interfaces.Infrastructure;
 using SaaS.Core.Interfaces.Repositories;
 using SaaS.Core.Interfaces.Services;
 using SaaS.Core.Settings;
+using SaaS.BLL.Common;
 
 namespace SaaS.BLL.Services;
 
@@ -26,6 +28,8 @@ public sealed class UserService : IUserService
     private readonly IPasswordHasher _passwordHasher;
     private readonly IEmailService _email;
     private readonly ICloudinaryService _cloudinary;
+    private readonly IApplicationSettingsRepository _appSettings;
+    private readonly ITenantContext _tenant;
     private readonly SmtpSettings _smtp;
 
     public UserService(
@@ -34,6 +38,8 @@ public sealed class UserService : IUserService
         IPasswordHasher passwordHasher,
         IEmailService email,
         ICloudinaryService cloudinary,
+        IApplicationSettingsRepository appSettings,
+        ITenantContext tenant,
         IOptions<SmtpSettings> smtp)
     {
         _users = users;
@@ -41,7 +47,67 @@ public sealed class UserService : IUserService
         _passwordHasher = passwordHasher;
         _email = email;
         _cloudinary = cloudinary;
+        _appSettings = appSettings;
+        _tenant = tenant;
         _smtp = smtp.Value;
+    }
+
+    /// <summary>
+    /// Whether the current tenant lets Admins and Managers (not only SuperAdmin)
+    /// unlock locked accounts. Surfaced to the Team page to decide button visibility.
+    /// </summary>
+    public async Task<bool> GetAllowStaffUnlockAsync(CancellationToken ct = default)
+    {
+        var settings = await _appSettings.GetAsync(ct);
+        return settings?.AllowStaffUnlock ?? false;
+    }
+
+    /// <summary>
+    /// Unlocks a locked account: resets the password to a fresh temporary one and
+    /// emails the user (naming who unlocked them) before clearing the lock.
+    /// SuperAdmin may unlock anyone. Admin / Manager may unlock only when the tenant
+    /// flag allows it AND the target is strictly lower in rank than the actor.
+    /// </summary>
+    public async Task UnlockAsync(int actingUserId, int actingRoleId, int targetUserId, CancellationToken ct = default)
+    {
+        var target = await _users.GetByIdAsync(targetUserId, ct)
+            ?? throw AppException.NotFound("User not found.");
+
+        if (actingRoleId != RoleConstants.SuperAdminId)
+        {
+            // Admin / Manager gate: tenant flag must be on...
+            if (!await GetAllowStaffUnlockAsync(ct))
+                throw AppException.Forbidden("Unlocking accounts is restricted to SuperAdmins for this agency.");
+
+            // ...and they can only unlock someone below their own rank.
+            // Lower RoleId = higher rank, so the target's id must be greater.
+            if (target.RoleId <= actingRoleId)
+                throw AppException.Forbidden("You can only unlock accounts below your own role.");
+        }
+
+        // Who is unlocking — shown in the email, e.g. "Alex Morgan (Admin)".
+        var actor = await _users.GetByIdAsync(actingUserId, ct);
+        var unlockedBy = actor is null
+            ? "an administrator"
+            : $"{actor.FullName} ({actor.RoleName})";
+
+        var newPassword = GenerateTemporaryPassword();
+
+        // Email the new password BEFORE changing anything: if delivery fails we
+        // leave the account locked and the old password intact, and surface why.
+        try
+        {
+            await _email.SendAccountUnlockedAsync(target.Email, target.FullName, target.Email, unlockedBy, newPassword, BuildLoginUrl(), ct);
+        }
+        catch (Exception ex)
+        {
+            throw new AppException(
+                $"Could not send the unlock email, so the account was left locked. {ex.Message}", 502);
+        }
+
+        var (hash, salt) = _passwordHasher.HashPassword(newPassword);
+        await _users.UpdatePasswordAsync(targetUserId, hash, salt, ct);
+        await _users.SetLockoutAsync(targetUserId, false, ct);
     }
 
     /// <summary>Uploads a cropped avatar to Cloudinary and stores its URL on the user.</summary>
@@ -204,11 +270,9 @@ public sealed class UserService : IUserService
 
     private string BuildLoginUrl()
     {
-        var baseUrl = (_smtp.ResetPasswordBaseUrl ?? string.Empty).Trim();
-        const string resetSuffix = "/reset-password";
-        if (baseUrl.EndsWith(resetSuffix, StringComparison.OrdinalIgnoreCase))
-            baseUrl = baseUrl[..^resetSuffix.Length];
-        baseUrl = baseUrl.TrimEnd('/');
+        // Prefer the resolved agency's own domain so each tenant's emails link to
+        // their own front-end; fall back to the configured base URL.
+        var baseUrl = FrontendUrls.ResolveOrigin(_tenant.Agency?.DomainUrl, _smtp.ResetPasswordBaseUrl);
         return string.IsNullOrEmpty(baseUrl) ? "/login" : $"{baseUrl}/login";
     }
 
@@ -234,6 +298,7 @@ public sealed class UserService : IUserService
         OfficeName = u.OfficeName,
         Salary = u.Salary,
         IsActive = u.IsActive,
+        IsLockedOut = u.IsLockedOut,
         CreatedOn = u.CreatedOn,
     };
 }
