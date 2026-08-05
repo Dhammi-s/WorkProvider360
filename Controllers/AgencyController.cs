@@ -36,18 +36,4 @@ public sealed class AgencyController : BaseApiController
             Location = agency.Location,
         }));
     }
-    [HttpGet("mefsdfhggh")]
-    public async Task<ActionResult<ApiResponse<AgencyInfoDto>>> Me(CancellationToken ct)
-    {
-        var agency = await _agencies.GetByIdAsync(CurrentAgencyId, ct);
-        if (agency is null)
-            return NotFound(ApiResponse.Fail("Agency not found."));
-
-        return Ok(ApiResponse<AgencyInfoDto>.Ok(new AgencyInfoDto
-        {
-            AgencyId = agency.AgencyId,
-            AgencyName = agency.AgencyName,
-            Location = agency.Location,
-        }));
-    }
 }
