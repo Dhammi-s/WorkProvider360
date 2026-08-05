@@ -275,6 +275,7 @@ public sealed class ApplicationService : IApplicationService
             RequireAddress = s?.RequireAddress ?? true,
             EmailNotificationsEnabled = s?.EmailNotificationsEnabled ?? true,
             NotificationEmail = s?.NotificationEmail,
+            AllowStaffUnlock = s?.AllowStaffUnlock ?? false,
             UpdatedOn = s?.UpdatedOn ?? DateTime.UtcNow,
         };
     }
@@ -287,6 +288,7 @@ public sealed class ApplicationService : IApplicationService
             RequireAddress = request.RequireAddress,
             EmailNotificationsEnabled = request.EmailNotificationsEnabled,
             NotificationEmail = string.IsNullOrWhiteSpace(request.NotificationEmail) ? null : request.NotificationEmail.Trim(),
+            AllowStaffUnlock = request.AllowStaffUnlock,
         }, ct);
 
         return new ApplicationSettingsDto
@@ -295,6 +297,7 @@ public sealed class ApplicationService : IApplicationService
             RequireAddress = saved.RequireAddress,
             EmailNotificationsEnabled = saved.EmailNotificationsEnabled,
             NotificationEmail = saved.NotificationEmail,
+            AllowStaffUnlock = saved.AllowStaffUnlock,
             UpdatedOn = saved.UpdatedOn,
         };
     }

@@ -27,6 +27,8 @@ public sealed class AppUser
     public string? OfficeName { get; set; }
     public decimal? Salary { get; set; }
     public bool IsActive { get; set; }
+    public int AccessFailedCount { get; set; }
+    public bool IsLockedOut { get; set; }
     public DateTime CreatedOn { get; set; }
     public DateTime? UpdatedOn { get; set; }
 }

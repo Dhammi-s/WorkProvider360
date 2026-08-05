@@ -72,7 +72,7 @@ public sealed class UsersController : BaseApiController
     }
 
     /// <summary>Only Admins / SuperAdmins can list all users in the tenant.</summary>
-    [Authorize(Roles = $"{RoleConstants.SuperAdmin},{RoleConstants.Admin}")]
+    [Authorize(Roles = $"{RoleConstants.SuperAdmin},{RoleConstants.Admin},{RoleConstants.Manager}")]
     [HttpGet]
     public async Task<ActionResult<ApiResponse<IReadOnlyList<UserDto>>>> GetAll(CancellationToken ct)
     {
@@ -81,7 +81,7 @@ public sealed class UsersController : BaseApiController
     }
 
     /// <summary>Server-side paged list of users.</summary>
-    [Authorize(Roles = $"{RoleConstants.SuperAdmin},{RoleConstants.Admin}")]
+    [Authorize(Roles = $"{RoleConstants.SuperAdmin},{RoleConstants.Admin},{RoleConstants.Manager}")]
     [HttpGet("paged")]
     public async Task<ActionResult<ApiResponse<PagedResultDto<UserDto>>>> GetPaged(
         [FromQuery] int page = 1, [FromQuery] int pageSize = 10,
@@ -143,5 +143,29 @@ public sealed class UsersController : BaseApiController
         var message = $"Sent to {result.Succeeded} of {result.Total} user(s)"
             + (result.Failed > 0 ? $"; {result.Failed} failed." : ".");
         return Ok(ApiResponse<BulkOperationResultDto>.Ok(result, message));
+    }
+
+    /// <summary>
+    /// Whether Admins/Managers may unlock accounts in this tenant. Lets the Team
+    /// page decide whether to show the "Unlock" action to non-SuperAdmins.
+    /// </summary>
+    [Authorize(Roles = $"{RoleConstants.SuperAdmin},{RoleConstants.Admin},{RoleConstants.Manager}")]
+    [HttpGet("security-policy")]
+    public async Task<ActionResult<ApiResponse<SecurityPolicyDto>>> GetSecurityPolicy(CancellationToken ct)
+    {
+        var allow = await _users.GetAllowStaffUnlockAsync(ct);
+        return Ok(ApiResponse<SecurityPolicyDto>.Ok(new SecurityPolicyDto { AllowStaffUnlock = allow }));
+    }
+
+    /// <summary>
+    /// Unlocks a locked account. SuperAdmin always; Admin / Manager only when the
+    /// tenant flag allows it and the target is below their own role.
+    /// </summary>
+    [Authorize(Roles = $"{RoleConstants.SuperAdmin},{RoleConstants.Admin},{RoleConstants.Manager}")]
+    [HttpPost("{id:int}/unlock")]
+    public async Task<ActionResult<ApiResponse<object?>>> Unlock(int id, CancellationToken ct)
+    {
+        await _users.UnlockAsync(CurrentUserId, CurrentRoleId, id, ct);
+        return Ok(ApiResponse.Ok("Account unlocked — a new temporary password has been emailed to the user."));
     }
 }

@@ -39,7 +39,8 @@ public sealed class ApplicationSettingsRepository : IApplicationSettingsReposito
                     settings.RequirePhone,
                     settings.RequireAddress,
                     settings.EmailNotificationsEnabled,
-                    settings.NotificationEmail
+                    settings.NotificationEmail,
+                    settings.AllowStaffUnlock
                 },
                 commandType: CommandType.StoredProcedure, cancellationToken: ct));
     }
