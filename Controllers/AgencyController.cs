@@ -36,4 +36,14 @@ public sealed class AgencyController : BaseApiController
             Location = agency.Location,
         }));
     }
+      [HttpGet]
+    public IActionResult Get()
+    {
+        return Ok(new
+        {
+            Message = "API is working successfully",
+            Status = true,
+            Time = DateTime.UtcNow
+        });
+    }
 }
