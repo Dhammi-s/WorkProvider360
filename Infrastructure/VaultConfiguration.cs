@@ -1,16 +1,25 @@
 /* =============================================================================
    Secret Vault configuration provider.
-   Pulls secret values from the self-hosted Secret Vault at startup and injects
+   Loads secret values from the self-hosted Secret Vault at startup and injects
    them into IConfiguration, keyed by the secret's Name. Name each vault secret
    exactly like the config key it replaces (e.g. "Stripe:SecretKey",
    "MasterDb:ConnectionString") and the rest of the app reads it unchanged.
 
-   Bootstrap config (appsettings.json / env), the only thing left locally:
+   appsettings.json (the only thing that stays local):
      "Vault": {
-       "BaseUrl": "https://sqlaccess.runasp.net",   // where the vault API lives
+       "BaseUrl": "https://sqlaccess.runasp.net",
        "ClientId": "app_xxx",
        "ClientSecret": "sk_xxx",
-       "Optional": true          // if the vault is unreachable, fall back to appsettings
+       "Optional": true,                     // if vault unreachable, fall back to appsettings
+       "Keys": [                             // secret names to load (used if the vault has no
+         "MasterDb:ConnectionString",        // bulk /my-secrets endpoint yet)
+         "Jwt:SigningKey",
+         "Smtp:UserName", "Smtp:Password",
+         "Stripe:PublishableKey", "Stripe:SecretKey",
+         "Twilio:AccountSid", "Twilio:AuthToken",
+         "Cloudinary:ApiKey", "Cloudinary:ApiSecret",
+         "Llm:ApiKey"
+       ]
      }
    ============================================================================= */
 
@@ -30,19 +39,20 @@ public static class VaultConfigurationExtensions
             return builder; // vault not configured — keep local appsettings values
 
         var optional = !bool.TryParse(bootstrap["Vault:Optional"], out var o) || o;
-        builder.Add(new VaultConfigurationSource(baseUrl!, clientId!, clientSecret!, optional));
+        var keys = bootstrap.GetSection("Vault:Keys").Get<string[]>() ?? Array.Empty<string>();
+        builder.Add(new VaultConfigurationSource(baseUrl!, clientId!, clientSecret!, keys, optional));
         return builder;
     }
 }
 
-public sealed class VaultConfigurationSource(string baseUrl, string clientId, string clientSecret, bool optional)
+public sealed class VaultConfigurationSource(string baseUrl, string clientId, string clientSecret, string[] keys, bool optional)
     : IConfigurationSource
 {
     public IConfigurationProvider Build(IConfigurationBuilder builder)
-        => new VaultConfigurationProvider(baseUrl, clientId, clientSecret, optional);
+        => new VaultConfigurationProvider(baseUrl, clientId, clientSecret, keys, optional);
 }
 
-public sealed class VaultConfigurationProvider(string baseUrl, string clientId, string clientSecret, bool optional)
+public sealed class VaultConfigurationProvider(string baseUrl, string clientId, string clientSecret, string[] keys, bool optional)
     : ConfigurationProvider
 {
     public override void Load()
@@ -52,7 +62,7 @@ public sealed class VaultConfigurationProvider(string baseUrl, string clientId, 
             using var http = new HttpClient
             {
                 BaseAddress = new Uri(baseUrl.TrimEnd('/') + "/"),
-                Timeout = TimeSpan.FromSeconds(20),
+                Timeout = TimeSpan.FromSeconds(25),
             };
 
             // 1. Authenticate (ClientId + ClientSecret) -> scoped token.
@@ -62,28 +72,63 @@ public sealed class VaultConfigurationProvider(string baseUrl, string clientId, 
             var loginJson = loginResp.Content.ReadAsStringAsync().GetAwaiter().GetResult();
             var token = JsonDocument.Parse(loginJson).RootElement.GetProperty("token").GetString();
 
-            // 2. Pull every secret this application is authorized for.
-            using var req = new HttpRequestMessage(HttpMethod.Get, "api/vault/my-secrets");
-            req.Headers.Authorization = new("Bearer", token);
-            using var resp = http.Send(req);
-            resp.EnsureSuccessStatusCode();
-            var json = resp.Content.ReadAsStringAsync().GetAwaiter().GetResult();
-
             var data = new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase);
-            foreach (var s in JsonDocument.Parse(json).RootElement.EnumerateArray())
+
+            // 2a. Preferred: one bulk call for every authorized secret.
+            var bulk = TryLoadBulk(http, token!);
+            if (bulk is not null)
             {
-                var name = s.GetProperty("name").GetString();
-                if (!string.IsNullOrEmpty(name))
-                    data[name] = s.GetProperty("value").GetString(); // name == config key (e.g. "Stripe:SecretKey")
+                data = bulk;
             }
+            else
+            {
+                // 2b. Fallback (older vault without /my-secrets): fetch each configured key by name.
+                foreach (var key in keys)
+                {
+                    var name = Uri.EscapeDataString(key); // handles the ':' in names
+                    using var req = new HttpRequestMessage(HttpMethod.Get, "api/vault/secrets/" + name);
+                    req.Headers.Authorization = new("Bearer", token);
+                    using var resp = http.Send(req);
+                    if (!resp.IsSuccessStatusCode) continue;
+                    var json = resp.Content.ReadAsStringAsync().GetAwaiter().GetResult();
+                    data[key] = JsonDocument.Parse(json).RootElement.GetProperty("value").GetString();
+                }
+            }
+
+            if (data.Count == 0 && !optional)
+                throw new InvalidOperationException("Vault returned no secrets. Check the app's assignments and Vault:Keys.");
+
             Data = data;
         }
         catch (Exception ex)
         {
             if (!optional)
                 throw new InvalidOperationException("Failed to load secrets from the vault: " + ex.Message, ex);
-            // Optional: vault unreachable -> leave local appsettings values in place.
             Console.WriteLine("[Vault] Could not load secrets, using local appsettings. " + ex.Message);
+        }
+    }
+
+    private static Dictionary<string, string?>? TryLoadBulk(HttpClient http, string token)
+    {
+        try
+        {
+            using var req = new HttpRequestMessage(HttpMethod.Get, "api/vault/my-secrets");
+            req.Headers.Authorization = new("Bearer", token);
+            using var resp = http.Send(req);
+            if (!resp.IsSuccessStatusCode) return null; // e.g. 404 on an older vault -> use per-name fallback
+            var json = resp.Content.ReadAsStringAsync().GetAwaiter().GetResult();
+            var data = new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase);
+            foreach (var s in JsonDocument.Parse(json).RootElement.EnumerateArray())
+            {
+                var name = s.GetProperty("name").GetString();
+                if (!string.IsNullOrEmpty(name))
+                    data[name] = s.GetProperty("value").GetString();
+            }
+            return data;
+        }
+        catch
+        {
+            return null;
         }
     }
 }
