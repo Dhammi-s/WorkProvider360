@@ -40,6 +40,10 @@ var jwtSettings = builder.Configuration.GetSection(JwtSettings.SectionName).Get<
 builder.Services.AddDataAccess(builder.Configuration);
 builder.Services.AddBusinessLogic(builder.Configuration);
 
+// In-memory cache client (self-hosted Redis-like store on the SqlAccess server).
+// Reuses the Vault:* app credential; inject ICacheClient anywhere.
+builder.Services.AddVaultCache(builder.Configuration);
+
 // ---------------------------------------------------------------------------
 // AuthN / AuthZ — Bearer tokens signed with HMAC-SHA512
 // ---------------------------------------------------------------------------
