@@ -1,0 +1,35 @@
+name: Deploy
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [ master, Development-secrateissue ]
+
+jobs:
+  deploy:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Publish
+        run: dotnet publish WorkProvider360.csproj -c Release -o publish
+
+      - name: Deploy with WebDeploy (app-offline releases locked DLLs)
+        shell: pwsh
+        env:
+          WD_SITE: ${{ secrets.WEBDEPLOY_SITE }}
+          WD_URL:  ${{ secrets.WEBDEPLOY_URL }}
+          WD_USER: ${{ secrets.WEBDEPLOY_USERNAME }}
+          WD_PASS: ${{ secrets.WEBDEPLOY_PASSWORD }}
+        run: |
+          $msdeploy = "C:\Program Files\IIS\Microsoft Web Deploy V3\msdeploy.exe"
+          $src  = "-source:contentPath=$env:GITHUB_WORKSPACE\publish"
+          $dest = "-dest:contentPath=$env:WD_SITE,computerName=$env:WD_URL,userName=$env:WD_USER,password=$env:WD_PASS,authtype=Basic"
+          & $msdeploy -verb:sync $src $dest -allowUntrusted=true -enableRule:AppOffline
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
