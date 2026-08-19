@@ -21,14 +21,6 @@ using WebApplication1.OpenApi;
 var builder = WebApplication.CreateBuilder(args);
 
 // ---------------------------------------------------------------------------
-// Secret Vault: pull secret keys (DB, JWT, SMTP, Stripe, Twilio, Cloudinary, LLM)
-// from the self-hosted vault and layer them OVER appsettings. Configured under
-// the "Vault" section; if unreachable and Optional=true it falls back to local
-// appsettings so the app still starts. Added first so later config reads see it.
-// ---------------------------------------------------------------------------
-builder.Configuration.AddVault(builder.Configuration);
-
-// ---------------------------------------------------------------------------
 // Configuration-bound settings
 // ---------------------------------------------------------------------------
 var jwtSettings = builder.Configuration.GetSection(JwtSettings.SectionName).Get<JwtSettings>()
@@ -39,10 +31,6 @@ var jwtSettings = builder.Configuration.GetSection(JwtSettings.SectionName).Get<
 // ---------------------------------------------------------------------------
 builder.Services.AddDataAccess(builder.Configuration);
 builder.Services.AddBusinessLogic(builder.Configuration);
-
-// In-memory cache client (self-hosted Redis-like store on the SqlAccess server).
-// Reuses the Vault:* app credential; inject ICacheClient anywhere.
-builder.Services.AddVaultCache(builder.Configuration);
 
 // ---------------------------------------------------------------------------
 // AuthN / AuthZ — Bearer tokens signed with HMAC-SHA512
