@@ -18,6 +18,16 @@ public sealed class RoleApplication
     public string Email { get; set; } = string.Empty;
     public string? Phone { get; set; }
     public string? Address { get; set; }
+    public string? City { get; set; }
+    public string? State { get; set; }
+    public string? PostalCode { get; set; }
+    public DateTime? DateOfBirth { get; set; }
+    public string? Gender { get; set; }
+    public string? Qualifications { get; set; }
+    public decimal? YearsOfExperience { get; set; }
+    public string? About { get; set; }
+    public bool? HasDrivingLicense { get; set; }
+    public bool? HasVehicle { get; set; }
     public int RequestedRoleId { get; set; }
     public string? RequestedRoleName { get; set; }
     public decimal? DesiredSalary { get; set; }

@@ -264,6 +264,61 @@ public sealed class EmailService : IEmailService
         return SendAsync(toAddress, $"Injury reported: {title}", body, ct);
     }
 
+    public Task SendClientWelcomeAsync(string toAddress, string fullName, string email, string temporaryPassword, string loginUrl, CancellationToken ct = default)
+    {
+        var body = $"""
+            <div style="margin:0;padding:0;background:#f0fdfa;">
+              <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#f0fdfa;padding:24px 0;font-family:Segoe UI,Roboto,Helvetica,Arial,sans-serif;">
+                <tr><td align="center">
+                  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:520px;background:#ffffff;border-radius:14px;overflow:hidden;border:1px solid #ccfbf1;">
+                    <tr>
+                      <td style="background:#0f766e;padding:28px 32px;">
+                        <div style="color:#ffffff;font-size:18px;font-weight:700;">Welcome to your care portal</div>
+                      </td>
+                    </tr>
+                    <tr>
+                      <td style="padding:28px 32px;color:#334155;font-size:14px;line-height:1.6;">
+                        <p style="margin:0 0 14px;">Hi {WebUtility.HtmlEncode(fullName)},</p>
+                        <p style="margin:0 0 14px;">An account has been created so you can see your upcoming visits, who is coming and when.</p>
+                        <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:18px 0;background:#f0fdfa;border:1px solid #ccfbf1;border-radius:10px;">
+                          <tr><td style="padding:16px 18px;">
+                            <div style="font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:#5e9a90;">Email</div>
+                            <div style="font-size:14px;font-weight:600;color:#0f172a;margin:2px 0 12px;">{WebUtility.HtmlEncode(email)}</div>
+                            <div style="font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:#5e9a90;">Temporary password</div>
+                            <div style="font-size:16px;font-weight:700;color:#0f172a;font-family:Consolas,Menlo,monospace;margin-top:2px;">{WebUtility.HtmlEncode(temporaryPassword)}</div>
+                          </td></tr>
+                        </table>
+                        <a href="{loginUrl}" style="display:inline-block;background:#0f766e;color:#ffffff;text-decoration:none;font-weight:600;font-size:14px;padding:12px 22px;border-radius:10px;">Sign in to your portal</a>
+                        <p style="margin:18px 0 0;color:#64748b;font-size:13px;">Please change this password from your profile after you sign in.</p>
+                      </td>
+                    </tr>
+                  </table>
+                </td></tr>
+              </table>
+            </div>
+            """;
+
+        return SendAsync(toAddress, "Your care portal is ready", body, ct);
+    }
+
+    public Task SendClientVisitScheduledAsync(string toAddress, string clientName, string title, string? serviceName, string assignedUserName, DateTime startUtc, DateTime endUtc, CancellationToken ct = default)
+    {
+        var body = $"""
+            <p>Hi {WebUtility.HtmlEncode(clientName)},</p>
+            <p>A visit has been scheduled for you.</p>
+            <ul>
+              <li><strong>Visit:</strong> {WebUtility.HtmlEncode(title)}</li>
+              <li><strong>Service:</strong> {WebUtility.HtmlEncode(serviceName ?? "—")}</li>
+              <li><strong>Team member:</strong> {WebUtility.HtmlEncode(assignedUserName)}</li>
+              <li><strong>Start:</strong> {FormatUtc(startUtc)}</li>
+              <li><strong>End:</strong> {FormatUtc(endUtc)}</li>
+            </ul>
+            <p>Sign in to your portal to see the details.</p>
+            """;
+
+        return SendAsync(toAddress, $"A visit has been scheduled: {title}", body, ct);
+    }
+
     private static string FormatUtc(DateTime utc) =>
         utc.ToString("ddd, dd MMM yyyy HH:mm") + " UTC";
 }

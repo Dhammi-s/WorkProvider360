@@ -39,6 +39,8 @@ public sealed class SchedulingService : ISchedulingService
     private readonly IEmailService _email;
     private readonly ISmsService _sms;
     private readonly ILogger<SchedulingService> _logger;
+    private readonly IClientRepository _clients;
+    private readonly IClientSettingsRepository _clientSettings;
 
     public SchedulingService(
         IScheduleRepository schedules,
@@ -48,6 +50,8 @@ public sealed class SchedulingService : ISchedulingService
         IUserService users,
         IEmailService email,
         ISmsService sms,
+        IClientRepository clients,
+        IClientSettingsRepository clientSettings,
         ILogger<SchedulingService> logger)
     {
         _schedules = schedules;
@@ -58,6 +62,8 @@ public sealed class SchedulingService : ISchedulingService
         _email = email;
         _sms = sms;
         _logger = logger;
+        _clients = clients;
+        _clientSettings = clientSettings;
     }
 
     // -------------------------------------------------------- Access / settings
@@ -125,13 +131,13 @@ public sealed class SchedulingService : ISchedulingService
         // You can only schedule people who rank strictly below you: Admin -> Manager/User,
         // Manager -> User only, SuperAdmin -> anyone.
         var myRank = RankOfRoleId(roleId);
-        return users.Where(u => u.IsActive && RankOfRoleName(u.RoleName) > myRank).ToList();
+        return users.Where(u => u.IsActive && u.RoleName != RoleConstants.Client && RankOfRoleName(u.RoleName) > myRank).ToList();
     }
 
     // --------------------------------------------------------------- Schedules
 
     public async Task<IReadOnlyList<ScheduleDto>> GetSchedulesAsync(
-        DateTime? fromUtc, DateTime? toUtc, int? assignedUserId, int currentUserId, int roleId, CancellationToken ct = default)
+        DateTime? fromUtc, DateTime? toUtc, int? assignedUserId, int? clientId, int currentUserId, int roleId, CancellationToken ct = default)
     {
         var settings = await _settings.GetAsync(ct);
         var level = LevelForRole(roleId, settings);
@@ -143,7 +149,7 @@ public sealed class SchedulingService : ISchedulingService
         // A regular User only ever sees their own schedules.
         var effectiveUserId = level == Self ? currentUserId : assignedUserId;
 
-        var rows = await _schedules.GetAllAsync(fromUtc, toUtc, effectiveUserId, ct);
+        var rows = await _schedules.GetAllAsync(fromUtc, toUtc, effectiveUserId, clientId, ct);
         return rows.Select(MapSchedule).ToList();
     }
 
@@ -179,11 +185,16 @@ public sealed class SchedulingService : ISchedulingService
             throw AppException.BadRequest("The selected user is not active.");
         EnsureCanScheduleFor(roleId, assignee);
 
+        var (client, customerName, location) = await ResolveClientForScheduleAsync(
+            request.ClientId, request.ServiceTypeId, request.CustomerName, request.Location, assignee, ct);
+
         var id = await _schedules.CreateAsync(new Schedule
         {
             Title = request.Title.Trim(),
-            CustomerName = Clean(request.CustomerName),
-            Location = Clean(request.Location),
+            CustomerName = customerName,
+            Location = location,
+            ClientId = request.ClientId,
+            ServiceTypeId = request.ServiceTypeId,
             AssignedUserId = request.AssignedUserId,
             StartUtc = request.StartUtc,
             EndUtc = request.EndUtc,
@@ -197,6 +208,8 @@ public sealed class SchedulingService : ISchedulingService
             ?? throw AppException.NotFound("Schedule not found after creation.");
 
         await SendCreationEmailsAsync(created, assignee, request.NotifyAdmin, request.NotifyManager, ct);
+
+        await MaybeNotifyClientAsync(created, client, ct);
 
         return MapSchedule(created);
     }
@@ -214,12 +227,17 @@ public sealed class SchedulingService : ISchedulingService
             ?? throw AppException.BadRequest("The selected user does not exist.");
         EnsureCanScheduleFor(roleId, assignee);
 
+        var (client, customerName, location) = await ResolveClientForScheduleAsync(
+            request.ClientId, request.ServiceTypeId, request.CustomerName, request.Location, assignee, ct);
+
         await _schedules.UpdateAsync(new Schedule
         {
             ScheduleId = scheduleId,
             Title = request.Title.Trim(),
-            CustomerName = Clean(request.CustomerName),
-            Location = Clean(request.Location),
+            CustomerName = customerName,
+            Location = location,
+            ClientId = request.ClientId,
+            ServiceTypeId = request.ServiceTypeId,
             AssignedUserId = request.AssignedUserId,
             StartUtc = request.StartUtc,
             EndUtc = request.EndUtc,
@@ -328,7 +346,7 @@ public sealed class SchedulingService : ISchedulingService
 
     // ------------------------------------------------------------- Time tracking
 
-    public async Task ClockInAsync(int scheduleId, int currentUserId, int roleId, CancellationToken ct = default)
+    public async Task ClockInAsync(int scheduleId, ClockRequestDto? request, int currentUserId, int roleId, CancellationToken ct = default)
     {
         var schedule = await RequireAssignedScheduleAsync(scheduleId, currentUserId, ct);
 
@@ -339,22 +357,29 @@ public sealed class SchedulingService : ISchedulingService
         // Once a full clock-in/out cycle has been recorded the clock is frozen.
         var existing = await _schedules.GetTimeEntriesAsync(scheduleId, ct);
         if (schedule.Status == "Completed" || existing.Any(e => e.ClockOutUtc is not null))
-            throw AppException.BadRequest("This shift is already completed — the clock is locked.");
+            throw AppException.BadRequest("This shift is already completed and the clock is locked.");
 
-        await _schedules.ClockInAsync(scheduleId, currentUserId, ct);
+        var signature = await ResolveSignatureAsync(schedule, request, "ClockIn", ct);
+
+        var entryId = await _schedules.ClockInAsync(scheduleId, currentUserId, request?.Latitude, request?.Longitude, ct);
+        await SaveSignatureAsync(entryId, "ClockIn", signature, ct);
 
         // Reflect that work has started (unless already completed/cancelled).
         if (schedule.Status is "Scheduled" or "Accepted")
             await _schedules.UpdateStatusAsync(scheduleId, "InProgress", schedule.RejectionReason, ct);
     }
 
-    public async Task ClockOutAsync(int scheduleId, int currentUserId, int roleId, CancellationToken ct = default)
+    public async Task ClockOutAsync(int scheduleId, ClockRequestDto? request, int currentUserId, int roleId, CancellationToken ct = default)
     {
-        await RequireAssignedScheduleAsync(scheduleId, currentUserId, ct);
+        var schedule = await RequireAssignedScheduleAsync(scheduleId, currentUserId, ct);
 
-        var affected = await _schedules.ClockOutAsync(scheduleId, currentUserId, ct);
-        if (affected == 0)
+        var signature = await ResolveSignatureAsync(schedule, request, "ClockOut", ct);
+
+        var closedEntryId = await _schedules.ClockOutAsync(scheduleId, currentUserId, request?.Latitude, request?.Longitude, ct);
+        if (closedEntryId == 0)
             throw AppException.BadRequest("You are not currently clocked in for this schedule.");
+
+        await SaveSignatureAsync(closedEntryId, "ClockOut", signature, ct);
 
         // Clocking out finishes the job.
         await _schedules.UpdateStatusAsync(scheduleId, "Completed", null, ct);
@@ -684,8 +709,14 @@ public sealed class SchedulingService : ISchedulingService
     /// <summary>When the tenant has auto-clock on, lazily resolve missed, ended shifts.</summary>
     private async Task MaybeAutoClockAsync(SchedulingSettings? settings, CancellationToken ct)
     {
-        if (settings?.AutoClockEnabled != true) return;
-        await _schedules.ApplyAutoClockAsync(DateTime.UtcNow, ct);
+        var now = DateTime.UtcNow;
+        if (settings?.AutoClockEnabled == true)
+            await _schedules.ApplyAutoClockAsync(now, ct);
+
+        // Client-visit auto clock-in/out phases are driven by ClientSettings.
+        var cs = await _clientSettings.GetAsync(ct);
+        if (cs is not null && (cs.AutoClockInEnabled || cs.AutoClockOutEnabled))
+            await _schedules.ApplyAutoClockPhasesAsync(now, cs.AutoClockInEnabled, cs.AutoClockOutEnabled, ct);
     }
 
     /// <summary>Role rank: SuperAdmin=1 (highest) … User=4. Unknown roles rank lowest.</summary>
@@ -695,6 +726,7 @@ public sealed class SchedulingService : ISchedulingService
         RoleConstants.AdminId => 2,
         RoleConstants.ManagerId => 3,
         RoleConstants.UserId => 4,
+        RoleConstants.ClientId => 5,
         _ => int.MaxValue,
     };
 
@@ -704,6 +736,7 @@ public sealed class SchedulingService : ISchedulingService
         RoleConstants.Admin => 2,
         RoleConstants.Manager => 3,
         RoleConstants.User => 4,
+        RoleConstants.Client => 5,
         _ => int.MaxValue,
     };
 
@@ -795,6 +828,10 @@ public sealed class SchedulingService : ISchedulingService
         Title = s.Title,
         CustomerName = s.CustomerName,
         Location = s.Location,
+        ClientId = s.ClientId,
+        ClientName = s.ClientName,
+        ServiceTypeId = s.ServiceTypeId,
+        ServiceTypeName = s.ServiceTypeName,
         AssignedUserId = s.AssignedUserId,
         AssignedUserName = s.AssignedUserName ?? string.Empty,
         StartUtc = s.StartUtc,
@@ -846,4 +883,104 @@ public sealed class SchedulingService : ISchedulingService
         AutoClockEnabled = s?.AutoClockEnabled ?? false,
         UpdatedOn = s?.UpdatedOn ?? DateTime.UtcNow,
     };
+
+    // ------------------------------------------------------ Client / signatures
+
+    public async Task<IReadOnlyList<TimeEntrySignatureDto>> GetSignaturesAsync(int scheduleId, int timeEntryId, int currentUserId, int roleId, CancellationToken ct = default)
+    {
+        var settings = await _settings.GetAsync(ct);
+        var schedule = await _schedules.GetByIdAsync(scheduleId, ct)
+            ?? throw AppException.NotFound("Schedule not found.");
+        EnsureCanViewSchedule(roleId, settings, schedule, currentUserId);
+
+        var sigs = await _schedules.GetSignaturesAsync(timeEntryId, ct);
+        return sigs.Select(s => new TimeEntrySignatureDto
+        {
+            SignatureId = s.SignatureId,
+            TimeEntryId = s.TimeEntryId,
+            Phase = s.Phase,
+            SignatureBase64 = s.SignatureBase64,
+            SignedByName = s.SignedByName,
+            SignedOnUtc = s.SignedOnUtc,
+        }).ToList();
+    }
+
+    /// <summary>
+    /// Resolves the client for a schedule and the effective CustomerName/Location.
+    /// When a client is chosen these are taken from the client record; the same-office
+    /// and matching-skill rules from ClientSettings are enforced against the assignee.
+    /// </summary>
+    private async Task<(Client? client, string? customerName, string? location)> ResolveClientForScheduleAsync(
+        int? clientId, int? serviceTypeId, string? customerName, string? location, UserDto assignee, CancellationToken ct)
+    {
+        if (clientId is null)
+            return (null, Clean(customerName), Clean(location));
+
+        var client = await _clients.GetByIdAsync(clientId.Value, ct)
+            ?? throw AppException.BadRequest("The selected client does not exist.");
+
+        var cs = await _clientSettings.GetAsync(ct);
+        if (cs is not null && (cs.RequireSameOffice || cs.RequireMatchingSkill))
+        {
+            var eligible = await _clients.GetEligibleCaregiversAsync(clientId.Value, serviceTypeId, ct);
+            var match = eligible.FirstOrDefault(e => e.UserId == assignee.UserId);
+            if (cs.RequireSameOffice && (match is null || !match.IsSameOffice))
+                throw AppException.BadRequest("The assigned team member must belong to the same office as the client.");
+            if (cs.RequireMatchingSkill && serviceTypeId is not null && (match is null || !match.HasSkill))
+                throw AppException.BadRequest("The assigned team member does not have the required skill for this service.");
+        }
+
+        var name = $"{client.FirstName} {client.LastName}".Trim();
+        var addr = string.Join(", ", new[] { client.AddressLine1, client.AddressLine2, client.City, client.State, client.PostalCode }
+            .Where(s => !string.IsNullOrWhiteSpace(s)));
+        return (client, name, string.IsNullOrWhiteSpace(addr) ? Clean(location) : addr);
+    }
+
+    private async Task MaybeNotifyClientAsync(Schedule schedule, Client? client, CancellationToken ct)
+    {
+        if (client is null || string.IsNullOrWhiteSpace(client.Email)) return;
+        var cs = await _clientSettings.GetAsync(ct);
+        if (cs?.NotifyClientOnSchedule != true) return;
+        try
+        {
+            await _email.SendClientVisitScheduledAsync(client.Email!, $"{client.FirstName} {client.LastName}".Trim(),
+                schedule.Title, schedule.ServiceTypeName, schedule.AssignedUserName ?? string.Empty,
+                schedule.StartUtc, schedule.EndUtc, ct);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Scheduled visit {Id} but failed to notify the client.", schedule.ScheduleId);
+        }
+    }
+
+    /// <summary>Validates and returns the signature to persist, enforcing required-signature flags for client visits.</summary>
+    private async Task<(string Base64, string? Name)?> ResolveSignatureAsync(Schedule schedule, ClockRequestDto? request, string phase, CancellationToken ct)
+    {
+        var sig = Clean(request?.SignatureBase64);
+
+        if (schedule.ClientId is not null)
+        {
+            var cs = await _clientSettings.GetAsync(ct);
+            var required = phase == "ClockIn"
+                ? cs?.RequireClientSignatureOnClockIn ?? false
+                : cs?.RequireClientSignatureOnClockOut ?? false;
+            if (required && sig is null)
+                throw AppException.BadRequest($"A client signature is required to clock {(phase == "ClockIn" ? "in" : "out")}.");
+        }
+
+        return sig is null ? null : (sig, Clean(request?.SignedByName));
+    }
+
+    private async Task SaveSignatureAsync(int timeEntryId, string phase, (string Base64, string? Name)? signature, CancellationToken ct)
+    {
+        if (signature is null || timeEntryId == 0) return;
+        await _schedules.CreateSignatureAsync(new TimeEntrySignature
+        {
+            TimeEntryId = timeEntryId,
+            Phase = phase,
+            SignatureBase64 = signature.Value.Base64,
+            SignedByName = signature.Value.Name,
+        }, ct);
+    }
+
 }

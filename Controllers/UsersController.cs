@@ -23,8 +23,13 @@ namespace WebApplication1.Controllers;
 public sealed class UsersController : BaseApiController
 {
     private readonly IUserService _users;
+    private readonly IUserProfileService _profiles;
 
-    public UsersController(IUserService users) => _users = users;
+    public UsersController(IUserService users, IUserProfileService profiles)
+    {
+        _users = users;
+        _profiles = profiles;
+    }
 
     /// <summary>
     /// One-time bootstrap of the first SuperAdmin for a tenant. Resolved by the
@@ -106,6 +111,9 @@ public sealed class UsersController : BaseApiController
             request.OfficeId = me?.OfficeId;
         }
 
+        if (request.RoleId == RoleConstants.ClientId)
+            return BadRequest(ApiResponse<UserDto>.Fail("Create clients from the Clients page."));
+
         var created = await _users.CreateAsync(request, ct);
         return CreatedAtAction(nameof(GetById), new { id = created.UserId },
             ApiResponse<UserDto>.Ok(created, "User created."));
@@ -167,5 +175,41 @@ public sealed class UsersController : BaseApiController
     {
         await _users.UnlockAsync(CurrentUserId, CurrentRoleId, id, ct);
         return Ok(ApiResponse.Ok("Account unlocked — a new temporary password has been emailed to the user."));
+    }
+
+    // ------------------------------------------------------------------- Profiles
+
+    /// <summary>Any authenticated staff member reads their own extended profile.</summary>
+    [HttpGet("me/profile")]
+    public async Task<ActionResult<ApiResponse<UserProfileDto>>> GetMyProfile(CancellationToken ct)
+    {
+        var profile = await _profiles.GetAsync(CurrentUserId, CurrentUserId, CurrentRoleId, ct);
+        return Ok(ApiResponse<UserProfileDto>.Ok(profile));
+    }
+
+    [HttpPut("me/profile")]
+    public async Task<ActionResult<ApiResponse<UserProfileDto>>> UpdateMyProfile(
+        [FromBody] UpsertUserProfileRequestDto request, CancellationToken ct)
+    {
+        var profile = await _profiles.UpsertAsync(CurrentUserId, request, CurrentUserId, CurrentRoleId, ct);
+        return Ok(ApiResponse<UserProfileDto>.Ok(profile, "Profile saved."));
+    }
+
+    /// <summary>SuperAdmin / Admin / Manager read a staff member profile.</summary>
+    [Authorize(Roles = $"{RoleConstants.SuperAdmin},{RoleConstants.Admin},{RoleConstants.Manager}")]
+    [HttpGet("{id:int}/profile")]
+    public async Task<ActionResult<ApiResponse<UserProfileDto>>> GetProfile(int id, CancellationToken ct)
+    {
+        var profile = await _profiles.GetAsync(id, CurrentUserId, CurrentRoleId, ct);
+        return Ok(ApiResponse<UserProfileDto>.Ok(profile));
+    }
+
+    [Authorize(Roles = $"{RoleConstants.SuperAdmin},{RoleConstants.Admin},{RoleConstants.Manager}")]
+    [HttpPut("{id:int}/profile")]
+    public async Task<ActionResult<ApiResponse<UserProfileDto>>> UpdateProfile(
+        int id, [FromBody] UpsertUserProfileRequestDto request, CancellationToken ct)
+    {
+        var profile = await _profiles.UpsertAsync(id, request, CurrentUserId, CurrentRoleId, ct);
+        return Ok(ApiResponse<UserProfileDto>.Ok(profile, "Profile saved."));
     }
 }

@@ -8,6 +8,7 @@
 
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using SaaS.Core.Constants;
 using SaaS.Core.Dtos.Inbound;
 using SaaS.Core.Dtos.Outbound;
 using SaaS.Core.Interfaces.Services;
@@ -20,7 +21,7 @@ namespace WebApplication1.Controllers;
 /// enforced in the service layer from the caller's role + tenant settings,
 /// so the class only requires an authenticated user.
 /// </summary>
-[Authorize]
+[Authorize(Roles = $"{RoleConstants.SuperAdmin},{RoleConstants.Admin},{RoleConstants.Manager},{RoleConstants.User}")]
 public sealed class SchedulingController : BaseApiController
 {
     private readonly ISchedulingService _scheduling;
@@ -73,9 +74,9 @@ public sealed class SchedulingController : BaseApiController
 
     [HttpGet]
     public async Task<ActionResult<ApiResponse<IReadOnlyList<ScheduleDto>>>> GetAll(
-        [FromQuery] DateTime? from, [FromQuery] DateTime? to, [FromQuery] int? userId, CancellationToken ct)
+        [FromQuery] DateTime? from, [FromQuery] DateTime? to, [FromQuery] int? userId, [FromQuery] int? clientId, CancellationToken ct)
     {
-        var items = await _scheduling.GetSchedulesAsync(from, to, userId, CurrentUserId, CurrentRoleId, ct);
+        var items = await _scheduling.GetSchedulesAsync(from, to, userId, clientId, CurrentUserId, CurrentRoleId, ct);
         return Ok(ApiResponse<IReadOnlyList<ScheduleDto>>.Ok(items));
     }
 
@@ -137,16 +138,16 @@ public sealed class SchedulingController : BaseApiController
     // ------------------------------------------------------------------ Time tracking
 
     [HttpPost("{id:int}/time/clock-in")]
-    public async Task<ActionResult<ApiResponse<object?>>> ClockIn(int id, CancellationToken ct)
+    public async Task<ActionResult<ApiResponse<object?>>> ClockIn(int id, [FromBody] ClockRequestDto? request, CancellationToken ct)
     {
-        await _scheduling.ClockInAsync(id, CurrentUserId, CurrentRoleId, ct);
+        await _scheduling.ClockInAsync(id, request, CurrentUserId, CurrentRoleId, ct);
         return Ok(ApiResponse.Ok("Clocked in."));
     }
 
     [HttpPost("{id:int}/time/clock-out")]
-    public async Task<ActionResult<ApiResponse<object?>>> ClockOut(int id, CancellationToken ct)
+    public async Task<ActionResult<ApiResponse<object?>>> ClockOut(int id, [FromBody] ClockRequestDto? request, CancellationToken ct)
     {
-        await _scheduling.ClockOutAsync(id, CurrentUserId, CurrentRoleId, ct);
+        await _scheduling.ClockOutAsync(id, request, CurrentUserId, CurrentRoleId, ct);
         return Ok(ApiResponse.Ok("Clocked out."));
     }
 
@@ -155,6 +156,14 @@ public sealed class SchedulingController : BaseApiController
     {
         var entries = await _scheduling.GetTimeEntriesAsync(id, CurrentUserId, CurrentRoleId, ct);
         return Ok(ApiResponse<IReadOnlyList<TimeEntryDto>>.Ok(entries));
+    }
+
+    /// <summary>Client signatures captured for a time entry (clock-in / clock-out).</summary>
+    [HttpGet("{id:int}/time/{entryId:int}/signatures")]
+    public async Task<ActionResult<ApiResponse<IReadOnlyList<TimeEntrySignatureDto>>>> GetSignatures(int id, int entryId, CancellationToken ct)
+    {
+        var sigs = await _scheduling.GetSignaturesAsync(id, entryId, CurrentUserId, CurrentRoleId, ct);
+        return Ok(ApiResponse<IReadOnlyList<TimeEntrySignatureDto>>.Ok(sigs));
     }
 
     [HttpPost("{id:int}/time")]

@@ -56,6 +56,12 @@ public static class DependencyInjection
         services.AddScoped<IInvoiceRepository, InvoiceRepository>();
         services.AddScoped<IPosRepository, PosRepository>();
 
+        // Home-services domain (clients, service types, staff profiles).
+        services.AddScoped<IServiceTypeRepository, ServiceTypeRepository>();
+        services.AddScoped<IClientRepository, ClientRepository>();
+        services.AddScoped<IClientSettingsRepository, ClientSettingsRepository>();
+        services.AddScoped<IUserProfileRepository, UserProfileRepository>();
+
         return services;
     }
 }
