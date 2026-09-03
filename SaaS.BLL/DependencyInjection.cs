@@ -58,6 +58,7 @@ public static class DependencyInjection
         services.AddScoped<IClientService, ClientService>();
         services.AddScoped<IClientPortalService, ClientPortalService>();
         services.AddScoped<IUserProfileService, UserProfileService>();
+        services.AddScoped<IShortcutService, ShortcutService>();
 
         return services;
     }
