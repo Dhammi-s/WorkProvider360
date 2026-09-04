@@ -906,6 +906,79 @@ public sealed class SchedulingService : ISchedulingService
     }
 
     /// <summary>
+    /// Aggregated, chronological care log for a shift: clock-in/out events (with
+    /// GPS), notes and injury reports, and captured client signatures with their
+    /// images. Visible to staff who can view the schedule.
+    /// </summary>
+    public async Task<IReadOnlyList<CareLogEntryDto>> GetCareLogAsync(int scheduleId, int currentUserId, int roleId, CancellationToken ct = default)
+    {
+        var settings = await _settings.GetAsync(ct);
+        var schedule = await _schedules.GetByIdAsync(scheduleId, ct)
+            ?? throw AppException.NotFound("Schedule not found.");
+        EnsureCanViewSchedule(roleId, settings, schedule, currentUserId);
+
+        var entries = await _schedules.GetTimeEntriesAsync(scheduleId, ct);
+        var notes = await _schedules.GetNotesAsync(scheduleId, ct);
+
+        var log = new List<CareLogEntryDto>();
+
+        foreach (var e in entries)
+        {
+            log.Add(new CareLogEntryDto
+            {
+                Type = "ClockIn",
+                TimestampUtc = e.ClockInUtc,
+                ActorName = e.UserName ?? string.Empty,
+                Source = e.Source,
+                Latitude = e.ClockInLatitude,
+                Longitude = e.ClockInLongitude,
+            });
+
+            if (e.ClockOutUtc is not null)
+            {
+                log.Add(new CareLogEntryDto
+                {
+                    Type = "ClockOut",
+                    TimestampUtc = e.ClockOutUtc.Value,
+                    ActorName = e.UserName ?? string.Empty,
+                    Source = e.Source,
+                    Latitude = e.ClockOutLatitude,
+                    Longitude = e.ClockOutLongitude,
+                });
+            }
+
+            // Signatures captured against this entry (image included).
+            var sigs = await _schedules.GetSignaturesAsync(e.TimeEntryId, ct);
+            foreach (var s in sigs)
+            {
+                log.Add(new CareLogEntryDto
+                {
+                    Type = "Signature",
+                    TimestampUtc = s.SignedOnUtc,
+                    ActorName = s.SignedByName ?? (e.UserName ?? string.Empty),
+                    Phase = s.Phase,
+                    SignedByName = s.SignedByName,
+                    SignatureBase64 = s.SignatureBase64,
+                });
+            }
+        }
+
+        foreach (var n in notes)
+        {
+            log.Add(new CareLogEntryDto
+            {
+                Type = string.Equals(n.NoteType, "Injury", StringComparison.OrdinalIgnoreCase) ? "Injury" : "Note",
+                TimestampUtc = n.CreatedOn,
+                ActorName = n.AuthorName ?? string.Empty,
+                Message = n.Message,
+            });
+        }
+
+        return log.OrderBy(x => x.TimestampUtc).ToList();
+    }
+
+
+    /// <summary>
     /// Resolves the client for a schedule and the effective CustomerName/Location.
     /// When a client is chosen these are taken from the client record; the same-office
     /// and matching-skill rules from ClientSettings are enforced against the assignee.

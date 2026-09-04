@@ -166,6 +166,14 @@ public sealed class SchedulingController : BaseApiController
         return Ok(ApiResponse<IReadOnlyList<TimeEntrySignatureDto>>.Ok(sigs));
     }
 
+    /// <summary>Aggregated care log (clock events, notes, signatures) for a shift.</summary>
+    [HttpGet("{id:int}/care-log")]
+    public async Task<ActionResult<ApiResponse<IReadOnlyList<CareLogEntryDto>>>> CareLog(int id, CancellationToken ct)
+    {
+        var log = await _scheduling.GetCareLogAsync(id, CurrentUserId, CurrentRoleId, ct);
+        return Ok(ApiResponse<IReadOnlyList<CareLogEntryDto>>.Ok(log));
+    }
+
     [HttpPost("{id:int}/time")]
     public async Task<ActionResult<ApiResponse<TimeEntryDto>>> AddTime(
         int id, [FromBody] ManualTimeEntryRequestDto request, CancellationToken ct)
