@@ -80,6 +80,15 @@ public sealed class SchedulingController : BaseApiController
         return Ok(ApiResponse<IReadOnlyList<ScheduleDto>>.Ok(items));
     }
 
+    /// <summary>Overlapping shifts already assigned to a caregiver in a window (double-booking check).</summary>
+    [HttpGet("conflicts")]
+    public async Task<ActionResult<ApiResponse<IReadOnlyList<ScheduleConflictDto>>>> Conflicts(
+        [FromQuery] int userId, [FromQuery] DateTime startUtc, [FromQuery] DateTime endUtc, [FromQuery] int? excludeScheduleId, CancellationToken ct)
+    {
+        var items = await _scheduling.GetConflictsAsync(userId, startUtc, endUtc, excludeScheduleId, CurrentUserId, CurrentRoleId, ct);
+        return Ok(ApiResponse<IReadOnlyList<ScheduleConflictDto>>.Ok(items));
+    }
+
     [HttpGet("{id:int}")]
     public async Task<ActionResult<ApiResponse<ScheduleDetailDto>>> GetById(int id, CancellationToken ct)
     {

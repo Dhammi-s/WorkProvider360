@@ -119,7 +119,7 @@ public sealed class UsersController : BaseApiController
             ApiResponse<UserDto>.Ok(created, "User created."));
     }
 
-    [Authorize(Roles = $"{RoleConstants.SuperAdmin},{RoleConstants.Admin}")]
+    [Authorize(Roles = $"{RoleConstants.SuperAdmin},{RoleConstants.Admin},{RoleConstants.Manager}")]
     [HttpGet("{id:int}")]
     public async Task<ActionResult<ApiResponse<UserDto>>> GetById(int id, CancellationToken ct)
     {

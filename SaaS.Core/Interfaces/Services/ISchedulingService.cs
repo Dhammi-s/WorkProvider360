@@ -29,6 +29,7 @@ public interface ISchedulingService
 
     // Schedules
     Task<IReadOnlyList<ScheduleDto>> GetSchedulesAsync(DateTime? fromUtc, DateTime? toUtc, int? assignedUserId, int? clientId, int currentUserId, int roleId, CancellationToken ct = default);
+    Task<IReadOnlyList<ScheduleConflictDto>> GetConflictsAsync(int assignedUserId, DateTime startUtc, DateTime endUtc, int? excludeScheduleId, int currentUserId, int roleId, CancellationToken ct = default);
     Task<ScheduleDetailDto> GetScheduleAsync(int scheduleId, int currentUserId, int roleId, CancellationToken ct = default);
     Task<ScheduleDto> CreateAsync(CreateScheduleRequestDto request, int currentUserId, int roleId, CancellationToken ct = default);
     Task<ScheduleDto> UpdateAsync(int scheduleId, UpdateScheduleRequestDto request, int currentUserId, int roleId, CancellationToken ct = default);

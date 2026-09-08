@@ -153,6 +153,45 @@ public sealed class SchedulingService : ISchedulingService
         return rows.Select(MapSchedule).ToList();
     }
 
+    /// <summary>
+    /// Overlapping shifts already assigned to the caregiver in the given window
+    /// (any client). Display-only — creation is never hard-blocked; the UI shows
+    /// these and lets the scheduler save anyway.
+    /// </summary>
+    public async Task<IReadOnlyList<ScheduleConflictDto>> GetConflictsAsync(
+        int assignedUserId, DateTime startUtc, DateTime endUtc, int? excludeScheduleId, int currentUserId, int roleId, CancellationToken ct = default)
+    {
+        var settings = await _settings.GetAsync(ct);
+        EnsureCanManage(roleId, settings);
+
+        if (endUtc <= startUtc || assignedUserId <= 0)
+            return new List<ScheduleConflictDto>();
+
+        // Pull the caregiver's shifts around the window (a day of slack each side
+        // covers timezone/long-shift edges), then keep true overlaps.
+        var rows = await _schedules.GetAllAsync(startUtc.AddDays(-1), endUtc.AddDays(1), assignedUserId, null, ct);
+
+        return rows
+            .Where(s => s.ScheduleId != (excludeScheduleId ?? 0)
+                     && s.Status != "Cancelled" && s.Status != "Rejected"
+                     && s.StartUtc < endUtc && s.EndUtc > startUtc)
+            .OrderBy(s => s.StartUtc)
+            .Select(s => new ScheduleConflictDto
+            {
+                ScheduleId = s.ScheduleId,
+                Title = s.Title,
+                ClientId = s.ClientId,
+                ClientName = s.ClientName ?? s.CustomerName,
+                AssignedUserId = s.AssignedUserId,
+                AssignedUserName = s.AssignedUserName ?? string.Empty,
+                StartUtc = s.StartUtc,
+                EndUtc = s.EndUtc,
+                Status = s.Status,
+            })
+            .ToList();
+    }
+
+
     public async Task<ScheduleDetailDto> GetScheduleAsync(int scheduleId, int currentUserId, int roleId, CancellationToken ct = default)
     {
         var settings = await _settings.GetAsync(ct);
