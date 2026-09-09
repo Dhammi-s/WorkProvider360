@@ -60,6 +60,9 @@ public static class DependencyInjection
         services.AddScoped<IUserProfileService, UserProfileService>();
         services.AddScoped<IShortcutService, ShortcutService>();
 
+        // Meeting scheduling domain
+        services.AddScoped<IMeetingService, MeetingService>();
+
         return services;
     }
 }

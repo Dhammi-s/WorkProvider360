@@ -63,6 +63,9 @@ public static class DependencyInjection
         services.AddScoped<IUserProfileRepository, UserProfileRepository>();
         services.AddScoped<IUserShortcutRepository, UserShortcutRepository>();
 
+        // Meeting scheduling domain
+        services.AddScoped<IMeetingRepository, MeetingRepository>();
+
         return services;
     }
 }
