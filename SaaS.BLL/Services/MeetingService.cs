@@ -27,8 +27,13 @@ namespace SaaS.BLL.Services;
 public sealed class MeetingService : IMeetingService
 {
     private readonly IMeetingRepository _meetings;
+    private readonly IEmailService _email;
 
-    public MeetingService(IMeetingRepository meetings) => _meetings = meetings;
+    public MeetingService(IMeetingRepository meetings, IEmailService email)
+    {
+        _meetings = meetings;
+        _email    = email;
+    }
 
     // ================================================================= Settings
 
@@ -141,6 +146,15 @@ public sealed class MeetingService : IMeetingService
 
         var created = await _meetings.GetByIdAsync(meetingId, ct)
             ?? throw new InvalidOperationException("Meeting was created but could not be retrieved.");
+
+        // Send invitations to all participants (except the creator/host).
+        // Emails are best-effort — failures never block the API response.
+        if (request.ParticipantUserIds is { Count: > 0 } || request.ParticipantClientIds is { Count: > 0 })
+        {
+            var allParts = await _meetings.GetParticipantsAsync(meetingId, ct);
+            foreach (var p in allParts.Where(p => p.ParticipantRole != "Host"))
+                await SendInviteEmailAsync(p, created, ct);
+        }
 
         return Map(created);
     }
@@ -362,6 +376,9 @@ public sealed class MeetingService : IMeetingService
         var added = parts.FirstOrDefault(p => p.ParticipantId == participantId)
             ?? throw new InvalidOperationException("Participant was added but could not be retrieved.");
 
+        // Notify the newly added participant — best-effort, never blocks the response.
+        await SendInviteEmailAsync(added, meeting, ct);
+
         return MapParticipant(added);
     }
 
@@ -572,6 +589,45 @@ public sealed class MeetingService : IMeetingService
     {
         if (value is not ("Pending" or "Paid" or "Refunded"))
             throw new ArgumentException("Payment status must be 'Pending', 'Paid', or 'Refunded'.");
+    }
+
+    /// <summary>
+    /// Best-effort meeting-invite email. Never throws — SMTP failures are
+    /// caught here (and already logged inside EmailService).
+    /// </summary>
+    private async Task SendInviteEmailAsync(MeetingParticipant p, Meeting meeting, CancellationToken ct)
+    {
+        // Resolve the correct email and display name depending on whether
+        // this is an internal user or an external client participant.
+        var toAddress = p.UserId.HasValue
+            ? p.ParticipantEmail
+            : (p.ClientEmail ?? p.ParticipantEmail);
+
+        var displayName = p.UserId.HasValue
+            ? p.ParticipantName
+            : (p.ClientName ?? p.ParticipantName);
+
+        if (string.IsNullOrWhiteSpace(toAddress)) return;
+
+        try
+        {
+            await _email.SendMeetingInviteAsync(
+                toAddress,
+                displayName ?? "Participant",
+                meeting.Title,
+                meeting.MeetingType,
+                meeting.Location,
+                meeting.StartUtc,
+                meeting.EndUtc,
+                meeting.CreatedByName ?? "Organizer",
+                meeting.IsPaid,
+                meeting.FeePerParticipant,
+                ct);
+        }
+        catch
+        {
+            // Best-effort — EmailService already records the failure in the email log.
+        }
     }
 
     // ================================================================= Mappers
