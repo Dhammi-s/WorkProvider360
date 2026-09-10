@@ -10,6 +10,7 @@ using SaaS.Core.Constants;
 using SaaS.Core.Dtos.Inbound;
 using SaaS.Core.Dtos.Outbound;
 using SaaS.Core.Entities;
+using SaaS.Core.Exceptions;
 using SaaS.Core.Interfaces.Repositories;
 using SaaS.Core.Interfaces.Services;
 
@@ -47,7 +48,7 @@ public sealed class MeetingService : IMeetingService
         UpdateMeetingSettingsRequestDto request, int callerRoleId, CancellationToken ct = default)
     {
         if (callerRoleId != RoleConstants.SuperAdminId)
-            throw new UnauthorizedAccessException("Only SuperAdmin can change meeting settings.");
+            throw AppException.Forbidden("Only SuperAdmin can change meeting settings.");
 
         ValidateAccessLevel(request.AdminAccess, nameof(request.AdminAccess));
         ValidateAccessLevel(request.ManagerAccess, nameof(request.ManagerAccess));
@@ -94,21 +95,18 @@ public sealed class MeetingService : IMeetingService
         CancellationToken ct = default)
     {
         var settings = await _meetings.GetSettingsAsync(ct);
-        var (access, canCreate) = ResolveAccess(callerRoleId, settings);
+        var (_, canCreate) = ResolveAccess(callerRoleId, settings);
 
         if (!canCreate)
-            throw new UnauthorizedAccessException("You do not have permission to create meetings.");
+            throw AppException.Forbidden("You do not have permission to create meetings.");
 
         if (request.IsPaid && !settings.AllowPaidMeetings)
-            throw new InvalidOperationException("Paid meetings are not enabled in settings.");
+            throw AppException.BadRequest("Paid meetings are not enabled in settings.");
 
         if (request.EndUtc <= request.StartUtc)
-            throw new ArgumentException("EndUtc must be after StartUtc.");
+            throw AppException.BadRequest("End time must be after start time.");
 
         ValidateMeetingType(request.MeetingType);
-
-        // If approval is required and caller is not SuperAdmin, set to Scheduled (pending approval could be a separate status)
-        // We keep Status="Scheduled" regardless; RequireApproval info is visible in settings.
 
         var meeting = new Meeting
         {
@@ -138,14 +136,14 @@ public sealed class MeetingService : IMeetingService
         if (request.ParticipantClientIds is { Count: > 0 })
         {
             if (!settings.AllowClientParticipants)
-                throw new InvalidOperationException("Client participants are not enabled in settings.");
+                throw AppException.BadRequest("Client participants are not enabled in settings.");
 
             foreach (var cid in request.ParticipantClientIds)
                 await _meetings.AddParticipantAsync(meetingId, null, cid, "Attendee", ct);
         }
 
         var created = await _meetings.GetByIdAsync(meetingId, ct)
-            ?? throw new InvalidOperationException("Meeting was created but could not be retrieved.");
+            ?? throw new AppException("Meeting was created but could not be retrieved.", 500);
 
         // Send invitations to all participants (except the creator/host).
         // Emails are best-effort — failures never block the API response.
@@ -181,9 +179,6 @@ public sealed class MeetingService : IMeetingService
         }
         else if (callerRoleId == RoleConstants.ClientId)
         {
-            // Client role: clientId is stored as UserId in JWT (the linked client record).
-            // We filter by participantClientId using the caller's user context.
-            // Frontend must pass clientId query param for this case.
             participantClientId = clientId;
         }
         else
@@ -207,17 +202,17 @@ public sealed class MeetingService : IMeetingService
         var (access, _) = ResolveAccess(callerRoleId, settings);
 
         if (access == "None")
-            throw new UnauthorizedAccessException("You do not have access to meetings.");
+            throw AppException.Forbidden("You do not have access to meetings.");
 
         var meeting = await _meetings.GetByIdAsync(meetingId, ct)
-            ?? throw new KeyNotFoundException($"Meeting {meetingId} not found.");
+            ?? throw AppException.NotFound($"Meeting {meetingId} not found.");
 
         // Users can only view meetings they are part of
         if (callerRoleId == RoleConstants.UserId)
         {
             var participants = await _meetings.GetParticipantsAsync(meetingId, ct);
             if (!participants.Any(p => p.UserId == callerUserId))
-                throw new UnauthorizedAccessException("You are not a participant of this meeting.");
+                throw AppException.Forbidden("You are not a participant of this meeting.");
         }
 
         var parts = await _meetings.GetParticipantsAsync(meetingId, ct);
@@ -254,23 +249,23 @@ public sealed class MeetingService : IMeetingService
         var settings = await _meetings.GetSettingsAsync(ct);
         var (access, _) = ResolveAccess(callerRoleId, settings);
         if (access != "Write")
-            throw new UnauthorizedAccessException("You do not have permission to edit meetings.");
+            throw AppException.Forbidden("You do not have permission to edit meetings.");
 
         var existing = await _meetings.GetByIdAsync(meetingId, ct)
-            ?? throw new KeyNotFoundException($"Meeting {meetingId} not found.");
+            ?? throw AppException.NotFound($"Meeting {meetingId} not found.");
 
         // Non-SuperAdmin can only edit their own meetings
         if (callerRoleId != RoleConstants.SuperAdminId && existing.CreatedByUserId != callerUserId)
-            throw new UnauthorizedAccessException("You can only edit meetings you created.");
+            throw AppException.Forbidden("You can only edit meetings you created.");
 
         if (existing.Status is "Completed" or "Cancelled")
-            throw new InvalidOperationException($"Cannot edit a meeting with status '{existing.Status}'.");
+            throw AppException.BadRequest($"Cannot edit a meeting with status '{existing.Status}'.");
 
         if (request.IsPaid && !settings.AllowPaidMeetings)
-            throw new InvalidOperationException("Paid meetings are not enabled in settings.");
+            throw AppException.BadRequest("Paid meetings are not enabled in settings.");
 
         if (request.EndUtc <= request.StartUtc)
-            throw new ArgumentException("EndUtc must be after StartUtc.");
+            throw AppException.BadRequest("End time must be after start time.");
 
         ValidateMeetingType(request.MeetingType);
 
@@ -302,14 +297,14 @@ public sealed class MeetingService : IMeetingService
         var settings = await _meetings.GetSettingsAsync(ct);
         var (access, _) = ResolveAccess(callerRoleId, settings);
         if (access != "Write")
-            throw new UnauthorizedAccessException("You do not have permission to update meeting status.");
+            throw AppException.Forbidden("You do not have permission to update meeting status.");
 
         var meeting = await _meetings.GetByIdAsync(meetingId, ct)
-            ?? throw new KeyNotFoundException($"Meeting {meetingId} not found.");
+            ?? throw AppException.NotFound($"Meeting {meetingId} not found.");
 
         // Non-SuperAdmin can only update status of their own meetings
         if (callerRoleId != RoleConstants.SuperAdminId && meeting.CreatedByUserId != callerUserId)
-            throw new UnauthorizedAccessException("You can only update status of meetings you created.");
+            throw AppException.Forbidden("You can only update status of meetings you created.");
 
         await _meetings.UpdateStatusAsync(meetingId, status, ct);
 
@@ -325,9 +320,9 @@ public sealed class MeetingService : IMeetingService
         if (callerRoleId is not (RoleConstants.SuperAdminId or RoleConstants.AdminId))
         {
             var meeting = await _meetings.GetByIdAsync(meetingId, ct)
-                ?? throw new KeyNotFoundException($"Meeting {meetingId} not found.");
+                ?? throw AppException.NotFound($"Meeting {meetingId} not found.");
             if (meeting.CreatedByUserId != callerUserId)
-                throw new UnauthorizedAccessException("You do not have permission to delete this meeting.");
+                throw AppException.Forbidden("You do not have permission to delete this meeting.");
         }
 
         await _meetings.DeleteAsync(meetingId, ct);
@@ -341,28 +336,28 @@ public sealed class MeetingService : IMeetingService
         CancellationToken ct = default)
     {
         if (request.UserId is null && request.ClientId is null)
-            throw new ArgumentException("Either UserId or ClientId must be provided.");
+            throw AppException.BadRequest("Either UserId or ClientId must be provided.");
 
         if (request.UserId is not null && request.ClientId is not null)
-            throw new ArgumentException("Provide only UserId or ClientId, not both.");
+            throw AppException.BadRequest("Provide only UserId or ClientId, not both.");
 
         var settings = await _meetings.GetSettingsAsync(ct);
         var (access, _) = ResolveAccess(callerRoleId, settings);
         if (access != "Write")
-            throw new UnauthorizedAccessException("You do not have permission to add participants.");
+            throw AppException.Forbidden("You do not have permission to add participants.");
 
         if (request.ClientId.HasValue && !settings.AllowClientParticipants)
-            throw new InvalidOperationException("Client participants are not enabled in settings.");
+            throw AppException.BadRequest("Client participants are not enabled in settings.");
 
         var meeting = await _meetings.GetByIdAsync(meetingId, ct)
-            ?? throw new KeyNotFoundException($"Meeting {meetingId} not found.");
+            ?? throw AppException.NotFound($"Meeting {meetingId} not found.");
 
         if (meeting.Status is "Completed" or "Cancelled")
-            throw new InvalidOperationException("Cannot add participants to a completed or cancelled meeting.");
+            throw AppException.BadRequest("Cannot add participants to a completed or cancelled meeting.");
 
         // Capacity check
         if (meeting.MaxParticipants.HasValue && meeting.ParticipantCount >= meeting.MaxParticipants)
-            throw new InvalidOperationException($"Meeting has reached its maximum capacity of {meeting.MaxParticipants} participants.");
+            throw AppException.BadRequest($"Meeting has reached its maximum capacity of {meeting.MaxParticipants} participants.");
 
         ValidateParticipantRole(request.ParticipantRole);
 
@@ -370,11 +365,11 @@ public sealed class MeetingService : IMeetingService
             meetingId, request.UserId, request.ClientId, request.ParticipantRole, ct);
 
         if (participantId == -1)
-            throw new InvalidOperationException("This participant is already added to the meeting.");
+            throw AppException.Conflict("This participant is already added to the meeting.");
 
         var parts = await _meetings.GetParticipantsAsync(meetingId, ct);
         var added = parts.FirstOrDefault(p => p.ParticipantId == participantId)
-            ?? throw new InvalidOperationException("Participant was added but could not be retrieved.");
+            ?? throw new AppException("Participant was added but could not be retrieved.", 500);
 
         // Notify the newly added participant — best-effort, never blocks the response.
         await SendInviteEmailAsync(added, meeting, ct);
@@ -389,11 +384,11 @@ public sealed class MeetingService : IMeetingService
         var settings = await _meetings.GetSettingsAsync(ct);
         var (access, _) = ResolveAccess(callerRoleId, settings);
         if (access == "None")
-            throw new UnauthorizedAccessException("You do not have access to meetings.");
+            throw AppException.Forbidden("You do not have access to meetings.");
 
         // Ensure meeting exists
         _ = await _meetings.GetByIdAsync(meetingId, ct)
-            ?? throw new KeyNotFoundException($"Meeting {meetingId} not found.");
+            ?? throw AppException.NotFound($"Meeting {meetingId} not found.");
 
         var parts = await _meetings.GetParticipantsAsync(meetingId, ct);
         return parts.Select(MapParticipant).ToList();
@@ -407,24 +402,24 @@ public sealed class MeetingService : IMeetingService
         var settings = await _meetings.GetSettingsAsync(ct);
         var (access, _) = ResolveAccess(callerRoleId, settings);
         if (access != "Write")
-            throw new UnauthorizedAccessException("You do not have permission to remove participants.");
+            throw AppException.Forbidden("You do not have permission to remove participants.");
 
         var meeting = await _meetings.GetByIdAsync(meetingId, ct)
-            ?? throw new KeyNotFoundException($"Meeting {meetingId} not found.");
+            ?? throw AppException.NotFound($"Meeting {meetingId} not found.");
 
         if (meeting.Status is "Completed" or "Cancelled")
-            throw new InvalidOperationException("Cannot remove participants from a completed or cancelled meeting.");
+            throw AppException.BadRequest("Cannot remove participants from a completed or cancelled meeting.");
 
         // Non-SuperAdmin can only manage their own meetings
         if (callerRoleId != RoleConstants.SuperAdminId && meeting.CreatedByUserId != callerUserId)
-            throw new UnauthorizedAccessException("You can only manage participants for meetings you created.");
+            throw AppException.Forbidden("You can only manage participants for meetings you created.");
 
         var parts = await _meetings.GetParticipantsAsync(meetingId, ct);
         var part  = parts.FirstOrDefault(p => p.ParticipantId == participantId)
-            ?? throw new KeyNotFoundException($"Participant {participantId} not found in meeting {meetingId}.");
+            ?? throw AppException.NotFound($"Participant {participantId} not found in meeting {meetingId}.");
 
         if (part.ParticipantRole == "Host")
-            throw new InvalidOperationException("The host cannot be removed from their own meeting.");
+            throw AppException.BadRequest("The host cannot be removed from their own meeting.");
 
         await _meetings.RemoveParticipantAsync(participantId, ct);
     }
@@ -437,12 +432,12 @@ public sealed class MeetingService : IMeetingService
         ValidateRsvpStatus(request.Status);
 
         _ = await _meetings.GetByIdAsync(meetingId, ct)
-            ?? throw new KeyNotFoundException($"Meeting {meetingId} not found.");
+            ?? throw AppException.NotFound($"Meeting {meetingId} not found.");
 
         var rowsAffected = await _meetings.RespondParticipantAsync(meetingId, callerUserId, request.Status, ct);
 
         if (rowsAffected == 0)
-            throw new InvalidOperationException("You are not an invited participant of this meeting, or you are the host.");
+            throw AppException.BadRequest("You are not an invited participant of this meeting, or you are the host.");
 
         return true;
     }
@@ -456,17 +451,17 @@ public sealed class MeetingService : IMeetingService
     {
         // Payment management is restricted to SuperAdmin and Admin
         if (callerRoleId is not (RoleConstants.SuperAdminId or RoleConstants.AdminId))
-            throw new UnauthorizedAccessException("Only Admin or SuperAdmin can record meeting payments.");
+            throw AppException.Forbidden("Only Admin or SuperAdmin can record meeting payments.");
 
         var settings = await _meetings.GetSettingsAsync(ct);
         if (!settings.AllowPaidMeetings)
-            throw new InvalidOperationException("Paid meetings are not enabled in settings.");
+            throw AppException.BadRequest("Paid meetings are not enabled in settings.");
 
         var meeting = await _meetings.GetByIdAsync(meetingId, ct)
-            ?? throw new KeyNotFoundException($"Meeting {meetingId} not found.");
+            ?? throw AppException.NotFound($"Meeting {meetingId} not found.");
 
         if (!meeting.IsPaid)
-            throw new InvalidOperationException("This meeting is not configured as a paid meeting.");
+            throw AppException.BadRequest("This meeting is not configured as a paid meeting.");
 
         ValidatePaymentMethod(request.Method);
         ValidatePaymentStatus(request.Status);
@@ -487,7 +482,7 @@ public sealed class MeetingService : IMeetingService
 
         var payments = await _meetings.GetPaymentsAsync(meetingId, ct);
         var recorded = payments.FirstOrDefault(p => p.PaymentId == paymentId)
-            ?? throw new InvalidOperationException("Payment was recorded but could not be retrieved.");
+            ?? throw new AppException("Payment was recorded but could not be retrieved.", 500);
 
         return MapPayment(recorded);
     }
@@ -497,10 +492,10 @@ public sealed class MeetingService : IMeetingService
         CancellationToken ct = default)
     {
         if (callerRoleId is not (RoleConstants.SuperAdminId or RoleConstants.AdminId or RoleConstants.ManagerId))
-            throw new UnauthorizedAccessException("You do not have permission to view payment records.");
+            throw AppException.Forbidden("You do not have permission to view payment records.");
 
         _ = await _meetings.GetByIdAsync(meetingId, ct)
-            ?? throw new KeyNotFoundException($"Meeting {meetingId} not found.");
+            ?? throw AppException.NotFound($"Meeting {meetingId} not found.");
 
         var payments = await _meetings.GetPaymentsAsync(meetingId, ct);
         return payments.Select(MapPayment).ToList();
@@ -511,10 +506,10 @@ public sealed class MeetingService : IMeetingService
         CancellationToken ct = default)
     {
         if (callerRoleId is not (RoleConstants.SuperAdminId or RoleConstants.AdminId or RoleConstants.ManagerId))
-            throw new UnauthorizedAccessException("You do not have permission to view payment summary.");
+            throw AppException.Forbidden("You do not have permission to view payment summary.");
 
         var meeting = await _meetings.GetByIdAsync(meetingId, ct)
-            ?? throw new KeyNotFoundException($"Meeting {meetingId} not found.");
+            ?? throw AppException.NotFound($"Meeting {meetingId} not found.");
 
         var participants = await _meetings.GetParticipantsAsync(meetingId, ct);
         var payments     = await _meetings.GetPaymentsAsync(meetingId, ct);
@@ -552,43 +547,43 @@ public sealed class MeetingService : IMeetingService
     private static void ValidateAccessLevel(string value, string field)
     {
         if (value is not ("None" or "Read" or "Write"))
-            throw new ArgumentException($"{field} must be 'None', 'Read', or 'Write'.");
+            throw AppException.BadRequest($"{field} must be 'None', 'Read', or 'Write'.");
     }
 
     private static void ValidateMeetingType(string value)
     {
         if (value is not ("InPerson" or "Online" or "Hybrid"))
-            throw new ArgumentException("MeetingType must be 'InPerson', 'Online', or 'Hybrid'.");
+            throw AppException.BadRequest("MeetingType must be 'InPerson', 'Online', or 'Hybrid'.");
     }
 
     private static void ValidateStatus(string value)
     {
         if (value is not ("Scheduled" or "InProgress" or "Completed" or "Cancelled"))
-            throw new ArgumentException("Status must be 'Scheduled', 'InProgress', 'Completed', or 'Cancelled'.");
+            throw AppException.BadRequest("Status must be 'Scheduled', 'InProgress', 'Completed', or 'Cancelled'.");
     }
 
     private static void ValidateRsvpStatus(string value)
     {
         if (value is not ("Accepted" or "Declined" or "Tentative"))
-            throw new ArgumentException("Status must be 'Accepted', 'Declined', or 'Tentative'.");
+            throw AppException.BadRequest("Status must be 'Accepted', 'Declined', or 'Tentative'.");
     }
 
     private static void ValidateParticipantRole(string value)
     {
         if (value is not ("Host" or "Attendee" or "Optional"))
-            throw new ArgumentException("ParticipantRole must be 'Host', 'Attendee', or 'Optional'.");
+            throw AppException.BadRequest("ParticipantRole must be 'Host', 'Attendee', or 'Optional'.");
     }
 
     private static void ValidatePaymentMethod(string value)
     {
         if (value is not ("Cash" or "Online"))
-            throw new ArgumentException("Payment method must be 'Cash' or 'Online'.");
+            throw AppException.BadRequest("Payment method must be 'Cash' or 'Online'.");
     }
 
     private static void ValidatePaymentStatus(string value)
     {
         if (value is not ("Pending" or "Paid" or "Refunded"))
-            throw new ArgumentException("Payment status must be 'Pending', 'Paid', or 'Refunded'.");
+            throw AppException.BadRequest("Payment status must be 'Pending', 'Paid', or 'Refunded'.");
     }
 
     /// <summary>
@@ -597,8 +592,6 @@ public sealed class MeetingService : IMeetingService
     /// </summary>
     private async Task SendInviteEmailAsync(MeetingParticipant p, Meeting meeting, CancellationToken ct)
     {
-        // Resolve the correct email and display name depending on whether
-        // this is an internal user or an external client participant.
         var toAddress = p.UserId.HasValue
             ? p.ParticipantEmail
             : (p.ClientEmail ?? p.ParticipantEmail);
@@ -672,41 +665,41 @@ public sealed class MeetingService : IMeetingService
 
     private static MeetingParticipantDto MapParticipant(MeetingParticipant p) => new()
     {
-        ParticipantId      = p.ParticipantId,
-        MeetingId          = p.MeetingId,
-        UserId             = p.UserId,
-        ParticipantName    = p.ParticipantName,
-        ParticipantEmail   = p.ParticipantEmail,
+        ParticipantId       = p.ParticipantId,
+        MeetingId           = p.MeetingId,
+        UserId              = p.UserId,
+        ParticipantName     = p.ParticipantName,
+        ParticipantEmail    = p.ParticipantEmail,
         ParticipantRoleName = p.ParticipantRoleName,
-        ClientId           = p.ClientId,
-        ClientName         = p.ClientName,
-        ClientEmail        = p.ClientEmail,
-        ParticipantRole    = p.ParticipantRole,
-        Status             = p.Status,
-        IsPaid             = p.IsPaid,
-        PaymentAmount      = p.PaymentAmount,
-        PaymentDate        = p.PaymentDate,
-        PaymentMethod      = p.PaymentMethod,
-        InvitedAt          = p.InvitedAt,
-        RespondedAt        = p.RespondedAt
+        ClientId            = p.ClientId,
+        ClientName          = p.ClientName,
+        ClientEmail         = p.ClientEmail,
+        ParticipantRole     = p.ParticipantRole,
+        Status              = p.Status,
+        IsPaid              = p.IsPaid,
+        PaymentAmount       = p.PaymentAmount,
+        PaymentDate         = p.PaymentDate,
+        PaymentMethod       = p.PaymentMethod,
+        InvitedAt           = p.InvitedAt,
+        RespondedAt         = p.RespondedAt
     };
 
     private static MeetingPaymentDto MapPayment(MeetingPayment p) => new()
     {
-        PaymentId              = p.PaymentId,
-        MeetingId              = p.MeetingId,
-        ParticipantId          = p.ParticipantId,
-        Amount                 = p.Amount,
-        Method                 = p.Method,
-        Status                 = p.Status,
-        TransactionId          = p.TransactionId,
-        Notes                  = p.Notes,
-        PaidAt                 = p.PaidAt,
-        RecordedByUserId       = p.RecordedByUserId,
-        RecordedByName         = p.RecordedByName,
-        ParticipantUserId      = p.ParticipantUserId,
-        ParticipantName        = p.ParticipantName,
-        ParticipantClientId    = p.ParticipantClientId,
-        ParticipantClientName  = p.ParticipantClientName
+        PaymentId             = p.PaymentId,
+        MeetingId             = p.MeetingId,
+        ParticipantId         = p.ParticipantId,
+        Amount                = p.Amount,
+        Method                = p.Method,
+        Status                = p.Status,
+        TransactionId         = p.TransactionId,
+        Notes                 = p.Notes,
+        PaidAt                = p.PaidAt,
+        RecordedByUserId      = p.RecordedByUserId,
+        RecordedByName        = p.RecordedByName,
+        ParticipantUserId     = p.ParticipantUserId,
+        ParticipantName       = p.ParticipantName,
+        ParticipantClientId   = p.ParticipantClientId,
+        ParticipantClientName = p.ParticipantClientName
     };
 }
