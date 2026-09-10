@@ -117,7 +117,7 @@ public sealed class MeetingService : IMeetingService
             Location          = request.Location,
             MeetingType       = request.MeetingType,
             IsPaid            = request.IsPaid,
-            FeePerParticipant = request.IsPaid ? request.FeePerParticipant : null,
+            FeePerParticipant = request.IsPaid ? (request.FeePerParticipant ?? 0m) : 0m,
             CreatedByUserId   = callerUserId,
             MaxParticipants   = request.MaxParticipants ?? settings.MaxParticipantsDefault,
             Notes             = request.Notes,
