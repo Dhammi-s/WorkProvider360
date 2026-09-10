@@ -56,6 +56,7 @@ public sealed class ApplicationsController : BaseApiController
     }
 
     /// <summary>Server-side paged list of applications (optionally filtered by status).</summary>
+    [Authorize(Roles = $"{RoleConstants.SuperAdmin},{RoleConstants.Admin}")]
     [HttpGet("paged")]
     public async Task<ActionResult<ApiResponse<PagedResultDto<ApplicationListItemDto>>>> GetPaged(
         [FromQuery] string? status, [FromQuery] int page = 1, [FromQuery] int pageSize = 10, CancellationToken ct = default)

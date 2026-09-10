@@ -33,6 +33,8 @@ public sealed class AuthService : IAuthService
     private readonly ITenantContext _tenant;
     private readonly JwtSettings _jwtSettings;
     private readonly SmtpSettings _smtpSettings;
+    private readonly IClientRepository _clients;
+    private readonly IClientSettingsRepository _clientSettings;
     private readonly ILogger<AuthService> _logger;
 
     public AuthService(
@@ -45,6 +47,8 @@ public sealed class AuthService : IAuthService
         ITenantContext tenant,
         IOptions<JwtSettings> jwtSettings,
         IOptions<SmtpSettings> smtpSettings,
+        IClientRepository clients,
+        IClientSettingsRepository clientSettings,
         ILogger<AuthService> logger)
     {
         _users = users;
@@ -57,6 +61,8 @@ public sealed class AuthService : IAuthService
         _jwtSettings = jwtSettings.Value;
         _smtpSettings = smtpSettings.Value;
         _logger = logger;
+        _clients = clients;
+        _clientSettings = clientSettings;
     }
 
     /// <summary>Failed sign-in attempts allowed before an account (except SuperAdmin) is locked.</summary>
@@ -88,6 +94,7 @@ public sealed class AuthService : IAuthService
 
         // Successful sign-in clears any accumulated failures.
         await _users.ResetFailedLoginAsync(user.UserId, ct);
+        await EnsurePortalAccessAsync(user, ct);
         return await IssueTokensAsync(user, ct);
     }
 
@@ -106,6 +113,8 @@ public sealed class AuthService : IAuthService
         var user = await _users.GetByIdAsync(userId, ct);
         if (user is null || !user.IsActive)
             throw AppException.Unauthorized("User is no longer active.");
+
+        await EnsurePortalAccessAsync(user, ct);
 
         // Rotate: revoke the used refresh token before issuing a new pair.
         await _refreshTokens.RevokeAsync(stored.RefreshTokenId, ct);
@@ -209,5 +218,23 @@ public sealed class AuthService : IAuthService
         var baseUrl = FrontendUrls.ResolveOrigin(_tenant.Agency?.DomainUrl, _smtpSettings.ResetPasswordBaseUrl);
         var query = $"email={WebUtility.UrlEncode(email)}&token={WebUtility.UrlEncode(token)}";
         return $"{baseUrl}/reset-password?{query}";
+    }
+
+    /// <summary>
+    /// A client (RoleId = Client) may sign in only when the tenant portal switch
+    /// AND the linked client record are both enabled. Runs after password checks so
+    /// it never leaks whether an email exists.
+    /// </summary>
+    private async Task EnsurePortalAccessAsync(AppUser user, CancellationToken ct)
+    {
+        if (user.RoleId != RoleConstants.ClientId) return;
+
+        var settings = await _clientSettings.GetAsync(ct);
+        if (settings?.ClientPortalEnabled == false)
+            throw AppException.Forbidden("Client portal access is disabled for this agency.");
+
+        var client = await _clients.GetByUserIdAsync(user.UserId, ct);
+        if (client is null || !client.PortalEnabled)
+            throw AppException.Forbidden("Client portal access is disabled for your account.");
     }
 }

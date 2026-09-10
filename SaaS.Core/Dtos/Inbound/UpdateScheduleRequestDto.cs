@@ -20,6 +20,10 @@ public sealed class UpdateScheduleRequestDto
 
     public string? Location { get; set; }
 
+    public int? ClientId { get; set; }
+
+    public int? ServiceTypeId { get; set; }
+
     [Required]
     public int AssignedUserId { get; set; }
 

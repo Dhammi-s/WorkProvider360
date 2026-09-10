@@ -15,4 +15,8 @@ public sealed class UpsertApplicationSettingsDto
     public bool EmailNotificationsEnabled { get; set; }
     public string? NotificationEmail { get; set; }
     public bool AllowStaffUnlock { get; set; }
+    public bool RequireQualifications { get; set; }
+    public bool RequireSkills { get; set; }
+    public bool RequireAvailability { get; set; }
+    public bool RequireDateOfBirth { get; set; }
 }

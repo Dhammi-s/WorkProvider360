@@ -17,6 +17,10 @@ public sealed class Schedule
     public string Title { get; set; } = string.Empty;
     public string? CustomerName { get; set; }
     public string? Location { get; set; }
+    public int? ClientId { get; set; }
+    public string? ClientName { get; set; }
+    public int? ServiceTypeId { get; set; }
+    public string? ServiceTypeName { get; set; }
     public int AssignedUserId { get; set; }
     public string? AssignedUserName { get; set; }
     public DateTime StartUtc { get; set; }

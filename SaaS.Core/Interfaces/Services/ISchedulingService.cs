@@ -28,7 +28,8 @@ public interface ISchedulingService
     Task<IReadOnlyList<UserDto>> GetAssignableUsersAsync(int roleId, CancellationToken ct = default);
 
     // Schedules
-    Task<IReadOnlyList<ScheduleDto>> GetSchedulesAsync(DateTime? fromUtc, DateTime? toUtc, int? assignedUserId, int currentUserId, int roleId, CancellationToken ct = default);
+    Task<IReadOnlyList<ScheduleDto>> GetSchedulesAsync(DateTime? fromUtc, DateTime? toUtc, int? assignedUserId, int? clientId, int currentUserId, int roleId, CancellationToken ct = default);
+    Task<IReadOnlyList<ScheduleConflictDto>> GetConflictsAsync(int assignedUserId, DateTime startUtc, DateTime endUtc, int? excludeScheduleId, int currentUserId, int roleId, CancellationToken ct = default);
     Task<ScheduleDetailDto> GetScheduleAsync(int scheduleId, int currentUserId, int roleId, CancellationToken ct = default);
     Task<ScheduleDto> CreateAsync(CreateScheduleRequestDto request, int currentUserId, int roleId, CancellationToken ct = default);
     Task<ScheduleDto> UpdateAsync(int scheduleId, UpdateScheduleRequestDto request, int currentUserId, int roleId, CancellationToken ct = default);
@@ -40,11 +41,13 @@ public interface ISchedulingService
     Task<IReadOnlyList<ScheduleNoteDto>> GetNotesAsync(int scheduleId, int currentUserId, int roleId, CancellationToken ct = default);
 
     // Time tracking
-    Task ClockInAsync(int scheduleId, int currentUserId, int roleId, CancellationToken ct = default);
-    Task ClockOutAsync(int scheduleId, int currentUserId, int roleId, CancellationToken ct = default);
+    Task ClockInAsync(int scheduleId, ClockRequestDto? request, int currentUserId, int roleId, CancellationToken ct = default);
+    Task ClockOutAsync(int scheduleId, ClockRequestDto? request, int currentUserId, int roleId, CancellationToken ct = default);
     Task<TimeEntryDto> AddManualTimeAsync(int scheduleId, ManualTimeEntryRequestDto request, int currentUserId, int roleId, CancellationToken ct = default);
     Task<TimeEntryDto> UpdateTimeAsync(int scheduleId, int timeEntryId, ManualTimeEntryRequestDto request, int currentUserId, int roleId, CancellationToken ct = default);
     Task<IReadOnlyList<TimeEntryDto>> GetTimeEntriesAsync(int scheduleId, int currentUserId, int roleId, CancellationToken ct = default);
+    Task<IReadOnlyList<TimeEntrySignatureDto>> GetSignaturesAsync(int scheduleId, int timeEntryId, int currentUserId, int roleId, CancellationToken ct = default);
+    Task<IReadOnlyList<CareLogEntryDto>> GetCareLogAsync(int scheduleId, int currentUserId, int roleId, CancellationToken ct = default);
 
     // Reporting
     Task<ScheduleReportDto> GetReportAsync(DateTime fromUtc, DateTime toUtc, int? assignedUserId, int currentUserId, int roleId, CancellationToken ct = default);

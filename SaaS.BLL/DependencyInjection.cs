@@ -53,6 +53,16 @@ public static class DependencyInjection
         services.AddSingleton<IPaymentProvider, MockPaymentProvider>();
         services.AddScoped<IPosService, PosService>();
 
+        // Home-services domain (clients, service types, portal, profiles).
+        services.AddScoped<IServiceTypeService, ServiceTypeService>();
+        services.AddScoped<IClientService, ClientService>();
+        services.AddScoped<IClientPortalService, ClientPortalService>();
+        services.AddScoped<IUserProfileService, UserProfileService>();
+        services.AddScoped<IShortcutService, ShortcutService>();
+
+        // Meeting scheduling domain
+        services.AddScoped<IMeetingService, MeetingService>();
+
         return services;
     }
 }
