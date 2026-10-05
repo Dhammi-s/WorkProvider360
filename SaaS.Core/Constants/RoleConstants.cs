@@ -1,7 +1,7 @@
 /* =============================================================================
    WorkProvider360 - Multi-tenant SaaS platform
    Developed by : Jasmeet Singh  (Full Stack Software Engineer)
-   Date         : 2026-07-31
+   Date         : 2026-09-03
    NOTE TO DEVELOPERS: Do NOT change functionality without full knowledge of the
    SaaS architecture. PLEASE FIRST DISCUSS WITH SOFTWARE ENGINEER JASMEET SINGH.
    ============================================================================= */
@@ -20,8 +20,12 @@ public static class RoleConstants
     public const int ManagerId = 3;
     public const int UserId = 4;
 
+    /// <summary>Portal-only role for clients whose visits the agency serves.</summary>
+    public const int ClientId = 5;
+
     public const string SuperAdmin = "SuperAdmin";
     public const string Admin = "Admin";
     public const string Manager = "Manager";
     public const string User = "User";
+    public const string Client = "Client";
 }

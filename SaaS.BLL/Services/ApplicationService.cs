@@ -7,6 +7,7 @@
    ============================================================================= */
 
 using System.Security.Cryptography;
+using System.Text.Json;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using SaaS.Core.Constants;
@@ -28,7 +29,7 @@ namespace SaaS.BLL.Services;
 public sealed class ApplicationService : IApplicationService
 {
     /// <summary>Roles a person may request through the public form.</summary>
-    private static readonly int[] ApplyableRoleIds = { RoleConstants.AdminId, RoleConstants.ManagerId };
+    private static readonly int[] ApplyableRoleIds = { RoleConstants.AdminId, RoleConstants.ManagerId, RoleConstants.UserId };
 
     private readonly IApplicationRepository _applications;
     private readonly IApplicationQuestionRepository _questions;
@@ -37,6 +38,8 @@ public sealed class ApplicationService : IApplicationService
     private readonly IUserService _users;
     private readonly IEmailService _email;
     private readonly SmtpSettings _smtp;
+    private readonly IServiceTypeRepository _serviceTypes;
+    private readonly IUserProfileRepository _profiles;
     private readonly ILogger<ApplicationService> _logger;
 
     public ApplicationService(
@@ -46,6 +49,8 @@ public sealed class ApplicationService : IApplicationService
         IRoleService roles,
         IUserService users,
         IEmailService email,
+        IServiceTypeRepository serviceTypes,
+        IUserProfileRepository profiles,
         IOptions<SmtpSettings> smtp,
         ILogger<ApplicationService> logger)
     {
@@ -57,6 +62,8 @@ public sealed class ApplicationService : IApplicationService
         _email = email;
         _smtp = smtp.Value;
         _logger = logger;
+        _serviceTypes = serviceTypes;
+        _profiles = profiles;
     }
 
     // ----------------------------------------------------------------- Public
@@ -66,13 +73,19 @@ public sealed class ApplicationService : IApplicationService
         var roles = await _roles.GetAllAsync(ct);
         var questions = await _questions.GetActiveAsync(ct);
         var settings = await _settings.GetAsync(ct);
+        var serviceTypes = await _serviceTypes.GetActiveAsync(ct);
 
         return new PublicFormConfigDto
         {
             Roles = roles.Where(r => r.IsActive && ApplyableRoleIds.Contains(r.RoleId)).ToList(),
             Questions = questions.Select(MapQuestion).ToList(),
+            ServiceTypes = serviceTypes.Select(MapService).ToList(),
             RequirePhone = settings?.RequirePhone ?? true,
             RequireAddress = settings?.RequireAddress ?? true,
+            RequireDateOfBirth = settings?.RequireDateOfBirth ?? false,
+            RequireQualifications = settings?.RequireQualifications ?? false,
+            RequireSkills = settings?.RequireSkills ?? true,
+            RequireAvailability = settings?.RequireAvailability ?? false,
         };
     }
 
@@ -90,6 +103,15 @@ public sealed class ApplicationService : IApplicationService
         if (requireAddress && string.IsNullOrWhiteSpace(request.Address))
             throw AppException.BadRequest("Address is required.");
 
+        if ((settings?.RequireDateOfBirth ?? false) && request.DateOfBirth is null)
+            throw AppException.BadRequest("Date of birth is required.");
+        if ((settings?.RequireQualifications ?? false) && string.IsNullOrWhiteSpace(request.Qualifications))
+            throw AppException.BadRequest("Qualifications are required.");
+        if ((settings?.RequireSkills ?? true) && (request.ServiceTypeIds is null || request.ServiceTypeIds.Count == 0))
+            throw AppException.BadRequest("Please select at least one skill.");
+        if ((settings?.RequireAvailability ?? false) && (request.Availability is null || request.Availability.Count == 0))
+            throw AppException.BadRequest("Please provide your weekly availability.");
+
         var activeQuestions = await _questions.GetActiveAsync(ct);
         var answersByQuestion = request.Answers.ToDictionary(a => a.QuestionId, a => a.AnswerText);
 
@@ -106,6 +128,16 @@ public sealed class ApplicationService : IApplicationService
             Email = request.Email,
             Phone = request.Phone,
             Address = request.Address,
+            City = request.City,
+            State = request.State,
+            PostalCode = request.PostalCode,
+            DateOfBirth = request.DateOfBirth,
+            Gender = request.Gender,
+            Qualifications = request.Qualifications,
+            YearsOfExperience = request.YearsOfExperience,
+            About = request.About,
+            HasDrivingLicense = request.HasDrivingLicense,
+            HasVehicle = request.HasVehicle,
             RequestedRoleId = request.RequestedRoleId,
             DesiredSalary = request.DesiredSalary,
         };
@@ -123,6 +155,9 @@ public sealed class ApplicationService : IApplicationService
                 AnswerText = ans,
             }, ct);
         }
+
+        await _applications.ReplaceServiceTypesAsync(applicationId, JsonSerializer.Serialize(request.ServiceTypeIds ?? new List<int>()), ct);
+        await _applications.ReplaceAvailabilityAsync(applicationId, SerializeAvailability(request.Availability), ct);
 
         if (settings?.EmailNotificationsEnabled ?? true)
         {
@@ -181,6 +216,8 @@ public sealed class ApplicationService : IApplicationService
         if (app is null) return null;
 
         var answers = await _applications.GetAnswersAsync(applicationId, ct);
+        var skills = await _applications.GetServiceTypesAsync(applicationId, ct);
+        var availability = await _applications.GetAvailabilityAsync(applicationId, ct);
         return new ApplicationDetailDto
         {
             ApplicationId = app.ApplicationId,
@@ -188,6 +225,16 @@ public sealed class ApplicationService : IApplicationService
             Email = app.Email,
             Phone = app.Phone,
             Address = app.Address,
+            City = app.City,
+            State = app.State,
+            PostalCode = app.PostalCode,
+            DateOfBirth = app.DateOfBirth,
+            Gender = app.Gender,
+            Qualifications = app.Qualifications,
+            YearsOfExperience = app.YearsOfExperience,
+            About = app.About,
+            HasDrivingLicense = app.HasDrivingLicense,
+            HasVehicle = app.HasVehicle,
             RequestedRoleId = app.RequestedRoleId,
             RequestedRoleName = app.RequestedRoleName ?? string.Empty,
             DesiredSalary = app.DesiredSalary,
@@ -201,6 +248,8 @@ public sealed class ApplicationService : IApplicationService
                 QuestionText = a.QuestionText,
                 AnswerText = a.AnswerText,
             }).ToList(),
+            Skills = skills.Select(MapService).ToList(),
+            Availability = availability.Select(MapSlot).ToList(),
         };
     }
 
@@ -222,15 +271,18 @@ public sealed class ApplicationService : IApplicationService
         }
 
         var tempPassword = GenerateTemporaryPassword();
-        await _users.CreateAsync(new CreateUserRequestDto
+        var newUser = await _users.CreateAsync(new CreateUserRequestDto
         {
             Email = app.Email,
             FullName = app.FullName,
             Password = tempPassword,
             RoleId = app.RequestedRoleId,
+            Phone = app.Phone,
             OfficeId = assignedOffice,
             Salary = app.DesiredSalary,
         }, ct);
+
+        await CopyApplicationToProfileAsync(app, applicationId, newUser.UserId, ct);
 
         await _applications.UpdateStatusAsync(applicationId, "Approved", null, reviewerUserId, ct);
 
@@ -276,6 +328,10 @@ public sealed class ApplicationService : IApplicationService
             EmailNotificationsEnabled = s?.EmailNotificationsEnabled ?? true,
             NotificationEmail = s?.NotificationEmail,
             AllowStaffUnlock = s?.AllowStaffUnlock ?? false,
+            RequireQualifications = s?.RequireQualifications ?? false,
+            RequireSkills = s?.RequireSkills ?? true,
+            RequireAvailability = s?.RequireAvailability ?? false,
+            RequireDateOfBirth = s?.RequireDateOfBirth ?? false,
             UpdatedOn = s?.UpdatedOn ?? DateTime.UtcNow,
         };
     }
@@ -289,6 +345,10 @@ public sealed class ApplicationService : IApplicationService
             EmailNotificationsEnabled = request.EmailNotificationsEnabled,
             NotificationEmail = string.IsNullOrWhiteSpace(request.NotificationEmail) ? null : request.NotificationEmail.Trim(),
             AllowStaffUnlock = request.AllowStaffUnlock,
+            RequireQualifications = request.RequireQualifications,
+            RequireSkills = request.RequireSkills,
+            RequireAvailability = request.RequireAvailability,
+            RequireDateOfBirth = request.RequireDateOfBirth,
         }, ct);
 
         return new ApplicationSettingsDto
@@ -298,6 +358,10 @@ public sealed class ApplicationService : IApplicationService
             EmailNotificationsEnabled = saved.EmailNotificationsEnabled,
             NotificationEmail = saved.NotificationEmail,
             AllowStaffUnlock = saved.AllowStaffUnlock,
+            RequireQualifications = saved.RequireQualifications,
+            RequireSkills = saved.RequireSkills,
+            RequireAvailability = saved.RequireAvailability,
+            RequireDateOfBirth = saved.RequireDateOfBirth,
             UpdatedOn = saved.UpdatedOn,
         };
     }
@@ -412,4 +476,73 @@ public sealed class ApplicationService : IApplicationService
         IsActive = q.IsActive,
         SortOrder = q.SortOrder,
     };
+
+    /// <summary>On approval, copy the application snapshot into the new staff member profile.</summary>
+    private async Task CopyApplicationToProfileAsync(RoleApplication app, int applicationId, int userId, CancellationToken ct)
+    {
+        await _profiles.UpsertAsync(new UserProfile
+        {
+            UserId = userId,
+            AddressLine1 = app.Address,
+            City = app.City,
+            State = app.State,
+            PostalCode = app.PostalCode,
+            DateOfBirth = app.DateOfBirth,
+            Gender = app.Gender,
+            Qualifications = app.Qualifications,
+            YearsOfExperience = app.YearsOfExperience,
+            About = app.About,
+            HasDrivingLicense = app.HasDrivingLicense ?? false,
+            HasVehicle = app.HasVehicle ?? false,
+            HireDate = DateTime.UtcNow.Date,
+            ApplicationId = applicationId,
+        }, ct);
+
+        var skills = await _applications.GetServiceTypesAsync(applicationId, ct);
+        await _profiles.ReplaceServiceTypesAsync(userId, JsonSerializer.Serialize(skills.Select(s => s.ServiceTypeId)), ct);
+
+        var availability = await _applications.GetAvailabilityAsync(applicationId, ct);
+        await _profiles.ReplaceAvailabilityAsync(userId, SerializeSlots(availability), ct);
+    }
+
+    /// <summary>Serializes inbound availability with the JSON keys the OPENJSON proc expects.</summary>
+    private static string SerializeAvailability(IEnumerable<AvailabilitySlotDto>? slots)
+    {
+        var list = (slots ?? Enumerable.Empty<AvailabilitySlotDto>())
+            .Where(s => !string.IsNullOrWhiteSpace(s.StartTime) && !string.IsNullOrWhiteSpace(s.EndTime))
+            .Select(s => new { s.DayOfWeek, s.StartTime, s.EndTime });
+        return JsonSerializer.Serialize(list);
+    }
+
+    private static string SerializeSlots(IEnumerable<AvailabilitySlot> slots)
+    {
+        var list = slots.Select(s => new
+        {
+            DayOfWeek = (int)s.DayOfWeek,
+            StartTime = s.StartTime.ToString(@"hh\:mm"),
+            EndTime = s.EndTime.ToString(@"hh\:mm"),
+        });
+        return JsonSerializer.Serialize(list);
+    }
+
+    private static ServiceTypeDto MapService(ServiceType s) => new()
+    {
+        ServiceTypeId = s.ServiceTypeId,
+        Name = s.Name,
+        Description = s.Description,
+        Category = s.Category,
+        ColorTag = s.ColorTag,
+        SortOrder = s.SortOrder,
+        IsActive = s.IsActive,
+        CreatedOn = s.CreatedOn,
+        UpdatedOn = s.UpdatedOn,
+    };
+
+    private static AvailabilitySlotDto MapSlot(AvailabilitySlot a) => new()
+    {
+        DayOfWeek = a.DayOfWeek,
+        StartTime = a.StartTime.ToString(@"hh\:mm"),
+        EndTime = a.EndTime.ToString(@"hh\:mm"),
+    };
+
 }

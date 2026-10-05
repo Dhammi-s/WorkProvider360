@@ -38,6 +38,19 @@ public interface IEmailService
     /// <summary>Alerts an admin/manager that a user reported an injury on a schedule.</summary>
     Task SendScheduleInjuryReportAsync(string toAddress, string title, string reporterName, string message, CancellationToken ct = default);
 
+    /// <summary>Sends portal login credentials to a client.</summary>
+    Task SendClientWelcomeAsync(string toAddress, string fullName, string email, string temporaryPassword, string loginUrl, CancellationToken ct = default);
+
+    /// <summary>Notifies a client that a visit has been scheduled for them.</summary>
+    Task SendClientVisitScheduledAsync(string toAddress, string clientName, string title, string? serviceName, string assignedUserName, DateTime startUtc, DateTime endUtc, CancellationToken ct = default);
+
+    /// <summary>Sends a meeting invitation to a participant (user or client) when they are added to a meeting.</summary>
+    Task SendMeetingInviteAsync(string toAddress, string participantName,
+        string meetingTitle, string meetingType, string? location,
+        DateTime startUtc, DateTime endUtc, string organizerName,
+        bool isPaid, decimal? feePerParticipant,
+        CancellationToken ct = default);
+
     /// <summary>Sends an invoice email with the PDF attached.</summary>
     Task SendInvoiceAsync(string toAddress, string subject, string htmlBody, byte[] pdfBytes, string pdfFileName, CancellationToken ct = default);
 }

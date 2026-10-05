@@ -7,6 +7,7 @@
    ============================================================================= */
 
 using System.ComponentModel.DataAnnotations;
+using SaaS.Core.Dtos.Outbound;
 
 namespace SaaS.Core.Dtos.Inbound;
 
@@ -23,6 +24,17 @@ public sealed class SubmitApplicationRequestDto
 
     public string? Address { get; set; }
 
+    public string? City { get; set; }
+    public string? State { get; set; }
+    public string? PostalCode { get; set; }
+    public DateTime? DateOfBirth { get; set; }
+    public string? Gender { get; set; }
+    public string? Qualifications { get; set; }
+    public decimal? YearsOfExperience { get; set; }
+    public string? About { get; set; }
+    public bool HasDrivingLicense { get; set; }
+    public bool HasVehicle { get; set; }
+
     [Required]
     public int RequestedRoleId { get; set; }
 
@@ -30,6 +42,8 @@ public sealed class SubmitApplicationRequestDto
     public decimal? DesiredSalary { get; set; }
 
     public List<SubmitAnswerDto> Answers { get; set; } = new();
+    public List<int> ServiceTypeIds { get; set; } = new();
+    public List<AvailabilitySlotDto> Availability { get; set; } = new();
 }
 
 public sealed class SubmitAnswerDto

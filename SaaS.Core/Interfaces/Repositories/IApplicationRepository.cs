@@ -21,4 +21,9 @@ public interface IApplicationRepository
 
     Task<int> CreateAnswerAsync(ApplicationAnswer answer, CancellationToken ct = default);
     Task<IReadOnlyList<ApplicationAnswer>> GetAnswersAsync(int applicationId, CancellationToken ct = default);
+
+    Task ReplaceServiceTypesAsync(int applicationId, string serviceTypeIdsJson, CancellationToken ct = default);
+    Task<IReadOnlyList<ServiceType>> GetServiceTypesAsync(int applicationId, CancellationToken ct = default);
+    Task ReplaceAvailabilityAsync(int applicationId, string slotsJson, CancellationToken ct = default);
+    Task<IReadOnlyList<AvailabilitySlot>> GetAvailabilityAsync(int applicationId, CancellationToken ct = default);
 }

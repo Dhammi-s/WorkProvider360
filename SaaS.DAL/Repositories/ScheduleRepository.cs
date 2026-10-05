@@ -36,6 +36,8 @@ public sealed class ScheduleRepository : IScheduleRepository
                     schedule.Title,
                     schedule.CustomerName,
                     schedule.Location,
+                    schedule.ClientId,
+                    schedule.ServiceTypeId,
                     schedule.AssignedUserId,
                     schedule.StartUtc,
                     schedule.EndUtc,
@@ -47,12 +49,12 @@ public sealed class ScheduleRepository : IScheduleRepository
                 commandType: CommandType.StoredProcedure, cancellationToken: ct));
     }
 
-    public async Task<IReadOnlyList<Schedule>> GetAllAsync(DateTime? fromUtc, DateTime? toUtc, int? assignedUserId, CancellationToken ct = default)
+    public async Task<IReadOnlyList<Schedule>> GetAllAsync(DateTime? fromUtc, DateTime? toUtc, int? assignedUserId, int? clientId, CancellationToken ct = default)
     {
         using var db = await _connectionFactory.CreateTenantConnectionAsync(ct);
         var rows = await db.QueryAsync<Schedule>(
             new CommandDefinition("usp_Schedule_GetAll",
-                new { FromUtc = fromUtc, ToUtc = toUtc, AssignedUserId = assignedUserId },
+                new { FromUtc = fromUtc, ToUtc = toUtc, AssignedUserId = assignedUserId, ClientId = clientId },
                 commandType: CommandType.StoredProcedure, cancellationToken: ct));
         return rows.AsList();
     }
@@ -76,6 +78,8 @@ public sealed class ScheduleRepository : IScheduleRepository
                     schedule.Title,
                     schedule.CustomerName,
                     schedule.Location,
+                    schedule.ClientId,
+                    schedule.ServiceTypeId,
                     schedule.AssignedUserId,
                     schedule.StartUtc,
                     schedule.EndUtc,
@@ -125,21 +129,21 @@ public sealed class ScheduleRepository : IScheduleRepository
 
     // ------------------------------------------------------------ Time entries
 
-    public async Task<int> ClockInAsync(int scheduleId, int userId, CancellationToken ct = default)
+    public async Task<int> ClockInAsync(int scheduleId, int userId, decimal? latitude, decimal? longitude, CancellationToken ct = default)
     {
         using var db = await _connectionFactory.CreateTenantConnectionAsync(ct);
         return await db.ExecuteScalarAsync<int>(
             new CommandDefinition("usp_TimeEntry_ClockIn",
-                new { ScheduleId = scheduleId, UserId = userId },
+                new { ScheduleId = scheduleId, UserId = userId, Latitude = latitude, Longitude = longitude },
                 commandType: CommandType.StoredProcedure, cancellationToken: ct));
     }
 
-    public async Task<int> ClockOutAsync(int scheduleId, int userId, CancellationToken ct = default)
+    public async Task<int> ClockOutAsync(int scheduleId, int userId, decimal? latitude, decimal? longitude, CancellationToken ct = default)
     {
         using var db = await _connectionFactory.CreateTenantConnectionAsync(ct);
         return await db.ExecuteScalarAsync<int>(
             new CommandDefinition("usp_TimeEntry_ClockOut",
-                new { ScheduleId = scheduleId, UserId = userId },
+                new { ScheduleId = scheduleId, UserId = userId, Latitude = latitude, Longitude = longitude },
                 commandType: CommandType.StoredProcedure, cancellationToken: ct));
     }
 
@@ -185,6 +189,45 @@ public sealed class ScheduleRepository : IScheduleRepository
         await db.ExecuteAsync(
             new CommandDefinition("usp_Schedule_ApplyAutoClock", new { NowUtc = nowUtc },
                 commandType: CommandType.StoredProcedure, cancellationToken: ct));
+    }
+
+    public async Task ApplyAutoClockPhasesAsync(DateTime nowUtc, bool autoClockIn, bool autoClockOut, CancellationToken ct = default)
+    {
+        using var db = await _connectionFactory.CreateTenantConnectionAsync(ct);
+        await db.ExecuteAsync(
+            new CommandDefinition("usp_Schedule_ApplyAutoClockPhases",
+                new { NowUtc = nowUtc, AutoClockIn = autoClockIn, AutoClockOut = autoClockOut },
+                commandType: CommandType.StoredProcedure, cancellationToken: ct));
+    }
+
+    // ------------------------------------------------------- Client visits / signatures
+
+    public async Task<IReadOnlyList<ClientVisit>> GetByClientAsync(int clientId, DateTime? fromUtc, DateTime? toUtc, string? status, CancellationToken ct = default)
+    {
+        using var db = await _connectionFactory.CreateTenantConnectionAsync(ct);
+        var rows = await db.QueryAsync<ClientVisit>(
+            new CommandDefinition("usp_Schedule_GetByClient",
+                new { ClientId = clientId, FromUtc = fromUtc, ToUtc = toUtc, Status = status },
+                commandType: CommandType.StoredProcedure, cancellationToken: ct));
+        return rows.AsList();
+    }
+
+    public async Task<int> CreateSignatureAsync(TimeEntrySignature signature, CancellationToken ct = default)
+    {
+        using var db = await _connectionFactory.CreateTenantConnectionAsync(ct);
+        return await db.ExecuteScalarAsync<int>(
+            new CommandDefinition("usp_TimeEntrySignature_Create",
+                new { signature.TimeEntryId, signature.Phase, signature.SignatureBase64, signature.SignedByName },
+                commandType: CommandType.StoredProcedure, cancellationToken: ct));
+    }
+
+    public async Task<IReadOnlyList<TimeEntrySignature>> GetSignaturesAsync(int timeEntryId, CancellationToken ct = default)
+    {
+        using var db = await _connectionFactory.CreateTenantConnectionAsync(ct);
+        var rows = await db.QueryAsync<TimeEntrySignature>(
+            new CommandDefinition("usp_TimeEntrySignature_GetByTimeEntry", new { TimeEntryId = timeEntryId },
+                commandType: CommandType.StoredProcedure, cancellationToken: ct));
+        return rows.AsList();
     }
 
     // -------------------------------------------------------------- Reporting
