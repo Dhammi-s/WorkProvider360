@@ -36,6 +36,16 @@ public sealed class ApplicationRepository : IApplicationRepository
                     application.Email,
                     application.Phone,
                     application.Address,
+                    application.City,
+                    application.State,
+                    application.PostalCode,
+                    application.DateOfBirth,
+                    application.Gender,
+                    application.Qualifications,
+                    application.YearsOfExperience,
+                    application.About,
+                    application.HasDrivingLicense,
+                    application.HasVehicle,
                     application.RequestedRoleId,
                     application.DesiredSalary
                 },
@@ -105,6 +115,42 @@ public sealed class ApplicationRepository : IApplicationRepository
         using var db = await _connectionFactory.CreateTenantConnectionAsync(ct);
         var rows = await db.QueryAsync<ApplicationAnswer>(
             new CommandDefinition("usp_ApplicationAnswer_GetByApplication", new { ApplicationId = applicationId },
+                commandType: CommandType.StoredProcedure, cancellationToken: ct));
+        return rows.AsList();
+    }
+
+    public async Task ReplaceServiceTypesAsync(int applicationId, string serviceTypeIdsJson, CancellationToken ct = default)
+    {
+        using var db = await _connectionFactory.CreateTenantConnectionAsync(ct);
+        await db.ExecuteAsync(
+            new CommandDefinition("usp_ApplicationServiceType_Replace",
+                new { ApplicationId = applicationId, ServiceTypeIdsJson = serviceTypeIdsJson },
+                commandType: CommandType.StoredProcedure, cancellationToken: ct));
+    }
+
+    public async Task<IReadOnlyList<ServiceType>> GetServiceTypesAsync(int applicationId, CancellationToken ct = default)
+    {
+        using var db = await _connectionFactory.CreateTenantConnectionAsync(ct);
+        var rows = await db.QueryAsync<ServiceType>(
+            new CommandDefinition("usp_ApplicationServiceType_GetByApplication", new { ApplicationId = applicationId },
+                commandType: CommandType.StoredProcedure, cancellationToken: ct));
+        return rows.AsList();
+    }
+
+    public async Task ReplaceAvailabilityAsync(int applicationId, string slotsJson, CancellationToken ct = default)
+    {
+        using var db = await _connectionFactory.CreateTenantConnectionAsync(ct);
+        await db.ExecuteAsync(
+            new CommandDefinition("usp_ApplicationAvailability_Replace",
+                new { ApplicationId = applicationId, SlotsJson = slotsJson },
+                commandType: CommandType.StoredProcedure, cancellationToken: ct));
+    }
+
+    public async Task<IReadOnlyList<AvailabilitySlot>> GetAvailabilityAsync(int applicationId, CancellationToken ct = default)
+    {
+        using var db = await _connectionFactory.CreateTenantConnectionAsync(ct);
+        var rows = await db.QueryAsync<AvailabilitySlot>(
+            new CommandDefinition("usp_ApplicationAvailability_GetByApplication", new { ApplicationId = applicationId },
                 commandType: CommandType.StoredProcedure, cancellationToken: ct));
         return rows.AsList();
     }

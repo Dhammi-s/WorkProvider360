@@ -19,4 +19,9 @@ public sealed class PublicFormConfigDto
     public IReadOnlyList<QuestionDto> Questions { get; set; } = new List<QuestionDto>();
     public bool RequirePhone { get; set; }
     public bool RequireAddress { get; set; }
+    public bool RequireDateOfBirth { get; set; }
+    public bool RequireQualifications { get; set; }
+    public bool RequireSkills { get; set; }
+    public bool RequireAvailability { get; set; }
+    public IReadOnlyList<ServiceTypeDto> ServiceTypes { get; set; } = new List<ServiceTypeDto>();
 }

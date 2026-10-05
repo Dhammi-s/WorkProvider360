@@ -22,5 +22,10 @@ public sealed class ApplicationSettings
 
     /// <summary>When true, Admins and Managers (not just SuperAdmin) may unlock locked accounts.</summary>
     public bool AllowStaffUnlock { get; set; }
+
+    public bool RequireQualifications { get; set; }
+    public bool RequireSkills { get; set; }
+    public bool RequireAvailability { get; set; }
+    public bool RequireDateOfBirth { get; set; }
     public DateTime UpdatedOn { get; set; }
 }

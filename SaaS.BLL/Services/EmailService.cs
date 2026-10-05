@@ -264,6 +264,182 @@ public sealed class EmailService : IEmailService
         return SendAsync(toAddress, $"Injury reported: {title}", body, ct);
     }
 
+    public Task SendClientWelcomeAsync(string toAddress, string fullName, string email, string temporaryPassword, string loginUrl, CancellationToken ct = default)
+    {
+        var body = $"""
+            <div style="margin:0;padding:0;background:#f0fdfa;">
+              <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#f0fdfa;padding:24px 0;font-family:Segoe UI,Roboto,Helvetica,Arial,sans-serif;">
+                <tr><td align="center">
+                  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:520px;background:#ffffff;border-radius:14px;overflow:hidden;border:1px solid #ccfbf1;">
+                    <tr>
+                      <td style="background:#0f766e;padding:28px 32px;">
+                        <div style="color:#ffffff;font-size:18px;font-weight:700;">Welcome to your care portal</div>
+                      </td>
+                    </tr>
+                    <tr>
+                      <td style="padding:28px 32px;color:#334155;font-size:14px;line-height:1.6;">
+                        <p style="margin:0 0 14px;">Hi {WebUtility.HtmlEncode(fullName)},</p>
+                        <p style="margin:0 0 14px;">An account has been created so you can see your upcoming visits, who is coming and when.</p>
+                        <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:18px 0;background:#f0fdfa;border:1px solid #ccfbf1;border-radius:10px;">
+                          <tr><td style="padding:16px 18px;">
+                            <div style="font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:#5e9a90;">Email</div>
+                            <div style="font-size:14px;font-weight:600;color:#0f172a;margin:2px 0 12px;">{WebUtility.HtmlEncode(email)}</div>
+                            <div style="font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:#5e9a90;">Temporary password</div>
+                            <div style="font-size:16px;font-weight:700;color:#0f172a;font-family:Consolas,Menlo,monospace;margin-top:2px;">{WebUtility.HtmlEncode(temporaryPassword)}</div>
+                          </td></tr>
+                        </table>
+                        <a href="{loginUrl}" style="display:inline-block;background:#0f766e;color:#ffffff;text-decoration:none;font-weight:600;font-size:14px;padding:12px 22px;border-radius:10px;">Sign in to your portal</a>
+                        <p style="margin:18px 0 0;color:#64748b;font-size:13px;">Please change this password from your profile after you sign in.</p>
+                      </td>
+                    </tr>
+                  </table>
+                </td></tr>
+              </table>
+            </div>
+            """;
+
+        return SendAsync(toAddress, "Your care portal is ready", body, ct);
+    }
+
+    public Task SendClientVisitScheduledAsync(string toAddress, string clientName, string title, string? serviceName, string assignedUserName, DateTime startUtc, DateTime endUtc, CancellationToken ct = default)
+    {
+        var body = $"""
+            <p>Hi {WebUtility.HtmlEncode(clientName)},</p>
+            <p>A visit has been scheduled for you.</p>
+            <ul>
+              <li><strong>Visit:</strong> {WebUtility.HtmlEncode(title)}</li>
+              <li><strong>Service:</strong> {WebUtility.HtmlEncode(serviceName ?? "—")}</li>
+              <li><strong>Team member:</strong> {WebUtility.HtmlEncode(assignedUserName)}</li>
+              <li><strong>Start:</strong> {FormatUtc(startUtc)}</li>
+              <li><strong>End:</strong> {FormatUtc(endUtc)}</li>
+            </ul>
+            <p>Sign in to your portal to see the details.</p>
+            """;
+
+        return SendAsync(toAddress, $"A visit has been scheduled: {title}", body, ct);
+    }
+
+    public Task SendMeetingInviteAsync(
+        string toAddress,
+        string participantName,
+        string meetingTitle,
+        string meetingType,
+        string? location,
+        DateTime startUtc,
+        DateTime endUtc,
+        string organizerName,
+        bool isPaid,
+        decimal? feePerParticipant,
+        CancellationToken ct = default)
+    {
+        var typeLabel = meetingType switch { "Online" => "Online", "Hybrid" => "Hybrid", _ => "In Person" };
+        var typeIcon  = meetingType switch { "Online" => "💻", "Hybrid" => "🔀", _ => "🏢" };
+
+        var locationRow = !string.IsNullOrWhiteSpace(location)
+            ? $"""
+              <tr>
+                <td style="padding:8px 0;font-size:13px;color:#64748b;border-bottom:1px solid #e2e8f0;width:40%;">Location</td>
+                <td style="padding:8px 0;font-size:13px;color:#0f172a;text-align:right;border-bottom:1px solid #e2e8f0;">{WebUtility.HtmlEncode(location)}</td>
+              </tr>
+              """
+            : string.Empty;
+
+        var paidRow = isPaid && feePerParticipant.HasValue
+            ? $"""
+              <tr>
+                <td style="padding:8px 0;font-size:13px;color:#64748b;width:40%;">Fee</td>
+                <td style="padding:8px 0;font-size:13px;color:#6366f1;font-weight:700;text-align:right;">{feePerParticipant.Value:C2} per participant</td>
+              </tr>
+              """
+            : string.Empty;
+
+        var body = $"""
+            <div style="margin:0;padding:0;background:#f1f5f9;">
+              <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#f1f5f9;padding:24px 0;font-family:Segoe UI,Roboto,Helvetica,Arial,sans-serif;">
+                <tr><td align="center">
+                  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:560px;background:#ffffff;border-radius:14px;overflow:hidden;border:1px solid #e2e8f0;">
+
+                    <!-- ── Header ─────────────────────────────────── -->
+                    <tr>
+                      <td style="background:linear-gradient(135deg,#6366f1 0%,#4f46e5 100%);padding:28px 32px;">
+                        <div style="display:inline-block;width:44px;height:44px;border-radius:12px;background:rgba(255,255,255,0.18);text-align:center;line-height:44px;font-size:22px;">📅</div>
+                        <div style="color:#ffffff;font-size:19px;font-weight:700;margin-top:14px;letter-spacing:-.01em;">You've been invited to a meeting</div>
+                        <div style="color:rgba(255,255,255,0.75);font-size:13px;margin-top:6px;">{WebUtility.HtmlEncode(meetingTitle)}</div>
+                      </td>
+                    </tr>
+
+                    <!-- ── Body ───────────────────────────────────── -->
+                    <tr>
+                      <td style="padding:28px 32px 24px;color:#334155;font-size:14px;line-height:1.65;">
+                        <p style="margin:0 0 16px;">Hi <strong style="color:#1e293b;">{WebUtility.HtmlEncode(participantName)}</strong>,</p>
+                        <p style="margin:0 0 22px;">
+                          <strong>{WebUtility.HtmlEncode(organizerName)}</strong> has invited you to an upcoming meeting.
+                          Here are the details:
+                        </p>
+
+                        <!-- Meeting details card -->
+                        <table role="presentation" width="100%" cellpadding="0" cellspacing="0"
+                               style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:12px;margin:0 0 26px;">
+                          <tr>
+                            <td style="padding:20px 22px;">
+                              <div style="font-size:15px;font-weight:700;color:#1e293b;margin-bottom:16px;">{WebUtility.HtmlEncode(meetingTitle)}</div>
+                              <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
+                                <tr>
+                                  <td style="padding:8px 0;font-size:13px;color:#64748b;border-bottom:1px solid #e2e8f0;width:40%;">Starts</td>
+                                  <td style="padding:8px 0;font-size:13px;color:#0f172a;font-weight:600;text-align:right;border-bottom:1px solid #e2e8f0;">{FormatUtc(startUtc)}</td>
+                                </tr>
+                                <tr>
+                                  <td style="padding:8px 0;font-size:13px;color:#64748b;border-bottom:1px solid #e2e8f0;">Ends</td>
+                                  <td style="padding:8px 0;font-size:13px;color:#0f172a;text-align:right;border-bottom:1px solid #e2e8f0;">{FormatUtc(endUtc)}</td>
+                                </tr>
+                                <tr>
+                                  <td style="padding:8px 0;font-size:13px;color:#64748b;border-bottom:1px solid #e2e8f0;">Type</td>
+                                  <td style="padding:8px 0;font-size:13px;color:#0f172a;text-align:right;border-bottom:1px solid #e2e8f0;">{typeIcon} {typeLabel}</td>
+                                </tr>
+                                {locationRow}
+                                <tr>
+                                  <td style="padding:8px 0;font-size:13px;color:#64748b;{(isPaid && feePerParticipant.HasValue ? "border-bottom:1px solid #e2e8f0;" : string.Empty)}">Organizer</td>
+                                  <td style="padding:8px 0;font-size:13px;color:#0f172a;text-align:right;{(isPaid && feePerParticipant.HasValue ? "border-bottom:1px solid #e2e8f0;" : string.Empty)}">{WebUtility.HtmlEncode(organizerName)}</td>
+                                </tr>
+                                {paidRow}
+                              </table>
+                            </td>
+                          </tr>
+                        </table>
+
+                        <!-- CTA -->
+                        <table role="presentation" cellpadding="0" cellspacing="0" style="margin-bottom:22px;">
+                          <tr>
+                            <td style="border-radius:10px;background:#6366f1;">
+                              <a style="display:inline-block;color:#ffffff;text-decoration:none;font-weight:600;font-size:14px;padding:12px 24px;border-radius:10px;">
+                                View Meeting Details
+                              </a>
+                            </td>
+                          </tr>
+                        </table>
+
+                        <p style="margin:0;color:#64748b;font-size:13px;">
+                          Sign in to <strong>WorkProvider360</strong> to accept or decline this invitation, see the agenda, and view full details.
+                        </p>
+                      </td>
+                    </tr>
+
+                    <!-- ── Footer ─────────────────────────────────── -->
+                    <tr>
+                      <td style="padding:16px 32px;background:#f8fafc;border-top:1px solid #e2e8f0;color:#94a3b8;font-size:12px;line-height:1.5;">
+                        If you were not expecting this invitation, you can safely ignore this email or contact your administrator.
+                      </td>
+                    </tr>
+
+                  </table>
+                </td></tr>
+              </table>
+            </div>
+            """;
+
+        return SendAsync(toAddress, $"Meeting invitation: {WebUtility.HtmlEncode(meetingTitle)}", body, ct);
+    }
+
     private static string FormatUtc(DateTime utc) =>
         utc.ToString("ddd, dd MMM yyyy HH:mm") + " UTC";
 }

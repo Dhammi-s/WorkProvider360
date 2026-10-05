@@ -20,6 +20,12 @@ public sealed class TimeEntry
     public string? UserName { get; set; }
     public DateTime ClockInUtc { get; set; }
     public DateTime? ClockOutUtc { get; set; }
+    public decimal? ClockInLatitude { get; set; }
+    public decimal? ClockInLongitude { get; set; }
+    public decimal? ClockOutLatitude { get; set; }
+    public decimal? ClockOutLongitude { get; set; }
+    public bool HasClockInSignature { get; set; }
+    public bool HasClockOutSignature { get; set; }
     public string Source { get; set; } = "Timer";
     public string? Note { get; set; }
     public DateTime CreatedOn { get; set; }

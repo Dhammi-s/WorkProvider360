@@ -29,6 +29,16 @@ public sealed class ApplicationDetailDto
     public string Email { get; set; } = string.Empty;
     public string? Phone { get; set; }
     public string? Address { get; set; }
+    public string? City { get; set; }
+    public string? State { get; set; }
+    public string? PostalCode { get; set; }
+    public DateTime? DateOfBirth { get; set; }
+    public string? Gender { get; set; }
+    public string? Qualifications { get; set; }
+    public decimal? YearsOfExperience { get; set; }
+    public string? About { get; set; }
+    public bool? HasDrivingLicense { get; set; }
+    public bool? HasVehicle { get; set; }
     public int RequestedRoleId { get; set; }
     public string RequestedRoleName { get; set; } = string.Empty;
     public decimal? DesiredSalary { get; set; }
@@ -37,6 +47,8 @@ public sealed class ApplicationDetailDto
     public DateTime? ReviewedOn { get; set; }
     public DateTime CreatedOn { get; set; }
     public IReadOnlyList<ApplicationAnswerDto> Answers { get; set; } = new List<ApplicationAnswerDto>();
+    public IReadOnlyList<ServiceTypeDto> Skills { get; set; } = new List<ServiceTypeDto>();
+    public IReadOnlyList<AvailabilitySlotDto> Availability { get; set; } = new List<AvailabilitySlotDto>();
 }
 
 public sealed class ApplicationAnswerDto
